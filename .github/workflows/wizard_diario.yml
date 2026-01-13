@@ -2,7 +2,7 @@ name: Wizard Lotofacil Diário
 
 on:
   schedule:
-    - cron: "0 11 * * *"   # 11:00 UTC = 08:00 em Brasília
+    - cron: "0 20 * * *"   # 11:00 UTC = 08:00 em Brasília
   workflow_dispatch:
     inputs:
       ultimos:
