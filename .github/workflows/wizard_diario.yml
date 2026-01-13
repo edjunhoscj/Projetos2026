@@ -57,7 +57,7 @@ jobs:
         run: |
           mkdir -p outputs
           # Timestamp em horário de Brasília
-          DATA=$(TZ="America/Sao_Paulo" date +"%Y-%m-%d_%H-%M-%S")
+          DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
