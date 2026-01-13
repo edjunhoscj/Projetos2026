@@ -6,6 +6,38 @@ python wizard_cli.py --modo agressivo --ultimos 20 --finais 5
 
 python wizard_cli.py --modo conservador --ultimos 20 --finais 5
 
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Como deixar o script executável (Esse é o Prático!!!!)
+
+No Terminal, dentro da pasta lotofacil:
+
+cd ~/Documents/Python_Ed/lotofacil
+chmod +x deploy.sh
+
+Como usar no dia a dia
+
+Sempre que quiser:
+
+cd ~/Documents/Python_Ed/lotofacil
+./deploy.sh
+
+
+Ele vai:
+
+Ativar o lotofacil-312
+
+Atualizar base da Caixa
+
+Gerar base_limpa
+
+Gerar combinacoes.csv
+
+Mostrar o git status
+
+Perguntar se você quer commit + push
+
+Registrar tudo em logs/deploy_...log
 -------------------------------------------------------------------------------
 
 
@@ -140,6 +172,7 @@ GitHub não aceita senha via HTTPS desde 2021.
 Por isso você recebeu:
 
 remote: Invalid username or token. Password authentication is not supported
+
 
 🚀 SOLUÇÃO CORRETA: usar SSH key
 
