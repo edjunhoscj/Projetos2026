@@ -1,4 +1,239 @@
-requests
-Keras
-pandas
-scikit_learn
+
+cd ~/Documents/Python_Ed/lotofacil
+python scripts/atualizar_base.py
+
+python wizard_cli.py --modo agressivo --ultimos 20 --finais 5
+
+python wizard_cli.py --modo conservador --ultimos 20 --finais 5
+
+-------------------------------------------------------------------------------
+
+
+▶️ Fluxo padrão pra jogar:
+
+python scripts/atualizar_base.py
+
+python wizard_cli.py --modo ...
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+🧭 Como usar no fluxo do dia a dia
+
+Na prática, pra jogar com tudo atualizado, você faz:
+
+Abrir o Terminal:
+
+cd ~/Documents/Python_Ed/lotofacil
+source lotofacil-312/bin/activate   # se o venv ainda não estiver ativo
+
+
+Atualizar a base histórica:
+
+python scripts/atualizar_base.py
+
+
+Você vai ver algo como:
+
+✅ Base atualizada com 3XXX concursos
+📁 Arquivo: /Users/macbookpro/Documents/Python_Ed/lotofacil/base/base_limpa.xlsx
+
+
+Rodar o wizard normalmente, por exemplo:
+
+python wizard_cli.py --modo agressivo --ultimos 20 --finais 5
+
+
+Pronto: ele já vai trabalhar com os concursos mais recentes.
+
+
+ - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+5️⃣ Passo a passo completo de uso (do zero)
+
+1. Abrir Terminal e ir para o projeto
+cd ~/Documents/Python_Ed/lotofacil
+
+2. Ativar o ambiente virtual (lotofacil-312)
+source lotofacil-312/bin/activate
+
+
+(Se o prompt aparecer com (lotofacil-312) no início, está certo.)
+
+3. Garantir dependências instaladas (uma vez só)
+pip install -r requirements.txt
+
+4. Gerar o arquivo de combinações (quando precisar)
+python scripts/gerar_combinacoes.py
+
+
+Isso cria/atualiza:
+
+combinacoes/combinacoes.csv
+
+
+5. Rodar o wizard para gerar 5 jogos finais
+
+Modo conservador:
+
+python wizard_cli.py --modo conservador --ultimos 20 --finais 5
+
+
+Modo agressivo:
+
+python wizard_cli.py --modo agressivo --ultimos 20 --finais 5
+
+
+Você verá algo do tipo:
+
+========================================
+     WIZARD LOTOFÁCIL - CLI
+========================================
+Base histórica: base/base_limpa.xlsx
+Combinações:    combinacoes/combinacoes.csv
+Modo:           conservador
+Últimos:        20 concursos
+Jogos finais:   5
+========================================
+
+🔍 Lendo combinações de: combinacoes/combinacoes.csv
+  -> Processando chunk 1 (50000 linhas)
+  -> Processando chunk 2 (50000 linhas)
+  ...
+
+🎯 JOGOS FINAIS SUGERIDOS
+
+Jogo 1: 01 03 05 07 09 11 13 15 17 19 21 22 23 24 25
+Jogo 2: ...
+...
+
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+✅ 1. O fluxo correto para atualizar arquivos no GitHub
+
+Depois de fazer alterações (por exemplo, atualizar a base, alterar wizard_cli.py etc.), você deve seguir:
+
+PASSO 1 — Verificar o status
+git status
+
+PASSO 2 — Adicionar os arquivos alterados
+git add .
+
+PASSO 3 — Criar o commit
+git commit -m "Atualização da base e ajustes no wizard"
+
+PASSO 4 — Enviar para o GitHub
+
+Se você usa SSH (RECOMENDADO):
+
+git push origin main
+
+
+Se usa HTTPS (não recomendado):
+
+git push -u origin main
+
+⚠️ IMPORTANTE — Você está usando HTTPS + senha (que não funciona mais)
+
+GitHub não aceita senha via HTTPS desde 2021.
+
+Por isso você recebeu:
+
+remote: Invalid username or token. Password authentication is not supported
+
+🚀 SOLUÇÃO CORRETA: usar SSH key
+
+Diga SIM quando o Git pedir a confirmação do servidor.
+
+✅ 2. Como saber se seu repositório local está realmente conectado ao GitHub
+
+Rode:
+
+git remote -v
+
+
+Você deve ver algo assim:
+
+origin  git@github.com:edjunhoscj/Projetos2026.git
+
+
+Se aparecer HTTPS, troque para SSH:
+
+git remote set-url origin git@github.com:edjunhoscj/Projetos2026.git
+
+🗝 3. Criar e registrar sua chave SSH no GitHub
+
+No terminal:
+
+Gerar chave SSH
+ssh-keygen -t ed25519 -C "edjunhoscj@gmail.com"
+
+
+Pressione ENTER para aceitar o caminho padrão.
+
+Iniciar o agente SSH
+eval "$(ssh-agent -s)"
+
+Adicionar sua chave ao agente
+ssh-add ~/.ssh/id_ed25519
+
+Copiar sua chave pública
+pbcopy < ~/.ssh/id_ed25519.pub
+
+No GitHub:
+
+Vá em Settings
+
+Clique em SSH and GPG Keys
+
+Escolha New SSH key
+
+Cole a chave
+
+Salve
+
+🎯 4. Como resolver o problema do arquivo gigante (combinações.csv)
+
+Você recebeu:
+
+File combinacoes/combinacoes.csv is 150.44 MB; this exceeds GitHub's file size limit of 100 MB
+
+
+GitHub NÃO aceita arquivos individuais acima de 100MB.
+
+✔ Solução 1 — não subir o arquivo
+
+Adicionar ao .gitignore:
+
+combinacoes/
+
+
+E só gerar localmente com seu script.
+
+✔ Solução 2 — usar Git LFS (se quiser subir o arquivo mesmo assim)
+
+Instalar:
+
+brew install git-lfs
+git lfs install
+
+
+Configurar para o arquivo:
+
+git lfs track "combinacoes/combinacoes.csv"
+
+
+Adicionar novamente:
+
+git add .gitattributes
+git add combinacoes/combinacoes.csv
+git commit -m "Adicionando via LFS"
+git push origin main
+
+📌 5. Checklist simples (faça sempre assim)
+
+✔ Confirmar que está usando SSH
+✔ Gerar a chave e registrar no GitHub (uma vez só)
+✔ git add .
+✔ git commit -m "mensagem"
+✔ git push origin main

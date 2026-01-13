@@ -1,21 +1,18 @@
-# Não enviar combinações gigantes para o GitHub
+# Arquivo gigante de combinações
 combinacoes/combinacoes.csv
-
-# Pasta inteira (caso queira excluir tudo)
-combinacoes/
-
-# caches
-__pycache__/
-*.pyc
 
 # ambientes virtuais
 venv/
 lotofacil-312/
 lotofacil-venv/
 
-# arquivos temporários
+# Python cache
+__pycache__/
+*.pyc
+
+# Logs temporários
 *.log
 *.tmp
 
-# arquivos de sistema macOS
+# macOS
 .DS_Store

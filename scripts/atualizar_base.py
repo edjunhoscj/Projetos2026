@@ -6,9 +6,7 @@ BASE_PATH = Path(__file__).resolve().parents[1] / "base"
 BASE_PATH.mkdir(exist_ok=True)
 ARQ_BASE = BASE_PATH / "base_limpa.xlsx"
 
-URL_CAIXA = (
-    "https://loteriascaixa-api.herokuapp.com/api/lotofacil"
-)
+URL_CAIXA = "https://loteriascaixa-api.herokuapp.com/api/lotofacil"
 
 def baixar_concursos():
     r = requests.get(URL_CAIXA, timeout=20)
@@ -21,14 +19,15 @@ def atualizar_base():
 
     registros = []
     for d in dados:
-        dezenas = sorted(d["dezenas"])
+        dezenas = sorted(int(x) for x in d["dezenas"])   # robustez extra
         registro = {
             "Concurso": d["concurso"],
             **{f"D{i+1}": dezenas[i] for i in range(15)}
         }
         registros.append(registro)
 
-    df = pd.DataFrame(registros).sort_values("Concurso")
+    # 👉 AQUI está a alteração solicitada
+    df = pd.DataFrame(registros).sort_values("Concurso").reset_index(drop=True)
 
     # Ciclo simples: reseta quando fecha 25 dezenas
     ciclo = 1
