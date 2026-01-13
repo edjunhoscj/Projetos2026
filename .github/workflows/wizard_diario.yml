@@ -55,7 +55,7 @@ jobs:
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           mkdir -p outputs
-          DATA=$(date +"%Y-%m-%d_%H-%M-%S")
+          DATA=$(TZ="America/Sao_Paulo" date +"%Y-%m-%d_%H-%M-%S")
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
