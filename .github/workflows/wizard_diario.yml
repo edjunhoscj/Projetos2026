@@ -2,7 +2,9 @@ name: Wizard Lotofacil Diário
 
 on:
   schedule:
-    - cron: "0 20 * * *"   # 11:00 UTC = 08:00 em Brasília
+    # 20:00 UTC = 17:00 em Brasília (BRT, UTC-3)
+    # Só de segunda (1) a sexta (5)
+    - cron: "0 20 * * 1-5"
   workflow_dispatch:
     inputs:
       ultimos:
@@ -13,6 +15,7 @@ on:
         description: "Quantidade de jogos finais"
         required: false
         default: "5"
+
 
 permissions:
   contents: write
