@@ -1,0 +1,13 @@
+# Arquivo gigante (NÃO versionar)
+combinacoes/combinacoes.csv
+
+# Saídas geradas
+outputs/
+
+# Arquivos de planilha grandes que você pode recriar
+base/base_dados_atualizada.xlsx
+base/base_limpa.xlsx
+
+# Ambientes virtuais (por precaução)
+lotofacil-312/
+.venv/
