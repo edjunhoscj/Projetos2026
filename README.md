@@ -1,236 +1,261 @@
-# LOTOFÁCIL  
+🧙‍♂️ WIZARD LOTOFÁCIL — Inteligência Estatística + Automação
 
-Jogando na Lotofácil utilizando rede neural.  
+Projeto completo para análise, atualização e geração de jogos da Lotofácil, combinando:
 
-## INFORMAÇÕES  
+✔ Rede neural (opcional)
+✔ Filtros estatísticos
+✔ Score probabilístico
+✔ Cobertura inteligente de dezenas
+✔ Geração automática diária via GitHub Actions
+✔ Comparação com últimos concursos
+✔ Dois modos de estratégia: agressivo e conservador
 
-**Linguagem utilizada: Python 3 (v3.8.2)**  
+📌 INFORMAÇÕES GERAIS
 
-### PRINCIPAIS PACOTES UTILIZADOS  
+Linguagem: Python 3.12
+Ambiente recomendado: MacOS, Windows ou Linux
+Atualização automática: GitHub Actions
+Dados em tempo real: API da Caixa (não oficial)
 
-- Pandas  
-- Numpy  
-- Keras  
-- Scikit-learn
+📦 PRINCIPAIS PACOTES UTILIZADOS
 
-### FUNCIONALIDADES  
+pandas
 
-- Análise de frequência das dezenas sorteadas por concurso  
-- Geração de pesos para cada dezena  
-- Criação de jogos  
-- Análise de probabilidade das dezenas dos jogos serem sorteadas  
+numpy
 
-# PRINCIPAIS INFORMAÇÕES DO JOGO  
+requests
 
-Informações obtidas no site da Caixa Econômica Federal, acessado em: 08/07/2020.  
+openpyxl
 
-**Observação**: Para maiores informações acessar o site da [LOTOFÁCIL](http://loterias.caixa.gov.br/wps/portal/loterias/landing/lotofacil/).   
-  
-## Como jogar  
-A Lotofácil é, como o próprio nome diz, fácil de apostar e principalmente de ganhar. Você marca entre 15 a 18 números, dentre os 25 disponíveis no volante, e fatura o prêmio se acertar 11, 12, 13, 14 ou 15 números. Pode ainda deixar que o sistema escolha os números para você por meio da Surpresinha, ou concorrer com a mesma aposta por 3, 6, 9 ou 12 concursos consecutivos através da Teimosinha.
+itertools
 
-### Apostas  
+argparse
 
-A aposta mínima, de 15 números, custa R$ 2,50.
+🧠 FUNCIONALIDADES DO PROJETO
+🔹 1. Atualização automática da base
 
-### Sorteios  
+O script:
 
-Os sorteios são realizados às segundas, quartas e sextas-feiras, sempre às 20h.
+scripts/atualizar_base.py
 
-### Premiação  
 
-O prêmio bruto corresponde a 43,35% da arrecadação. Dessa porcentagem, será deduzido o pagamento dos prêmios com valores fixos:
+🔸 Baixa os concursos via API
+🔸 Salva em base/base_limpa.xlsx
+🔸 Gera coluna Ciclo
+🔸 Atualiza o GitHub automaticamente (GitHub Actions)
 
-- R$ 5,00 para as apostas com 11 prognósticos certos entre os 15 sorteados;
-- R$ 10,00 para as apostas com 12 prognósticos certos entre os 15 sorteados;
-- R$ 25,00 para as apostas com 13 prognósticos certos entre os 15 sorteados.
+🔹 2. Geração de todas as combinações possíveis
 
-Após a apuração dos ganhadores dos prêmios com valores fixos, o valor restante do total destinado à premiação será distribuído para as demais faixas de prêmios nos seguintes percentuais:
+O script:
 
-- 65% entre os acertadores de 15 números;
-- 20% entre os acertadores de 14 números entre os 15 sorteados.
-- 15% ficam acumulados para a primeira faixa (15 acertos) do concurso especial realizado em setembro de cada ano.
+scripts/gerar_combinacoes.py
 
-Os prêmios prescrevem 90 dias após a data do sorteio. Após esse prazo, os valores são repassados ao Tesouro Nacional para aplicação no FIES - Fundo de Financiamento ao Estudante do Ensino Superior.
 
-### Recebimento de prêmios  
+Cria o arquivo:
 
-Você pode receber seu prêmio em qualquer casa lotérica credenciada ou nas agências da Caixa. Caso o prêmio líquido seja superior a R$ 1.332,78 (bruto de R$ 1.903,98) o pagamento pode ser realizado somente nas agências da Caixa. Valores iguais ou acima de R$ 10.000,00 são pagos após 2 dias de sua apresentação na agência da Caixa.
+combinacoes/combinacoes.csv
 
-### Acumulação  
 
-Não havendo ganhador em qualquer faixa de premiação, o valor acumula para o concurso seguinte, na faixa de prêmio com 15 acertos. Não deixe de conferir o seu bilhete de aposta.
+Com todas as 3.268.760 combinações de 15 dezenas.
 
-### Tabela de preços  
+⚠️ Este arquivo não vai para o GitHub (é muito grande).
+Você gera localmente com:
 
-|     Quantidade de números   |    Valor em R$    |
-| :-------------------------: |:-----------------:|
-| 15 números                  |       2,50        |
-| 16 números                  |       40,00       |
-| 17 números                  |       340,00      |
-| 18 números                  |       2.040,00    |  
+python scripts/gerar_combinacoes.py
 
-# COMO UTILIZAR
+🔹 3. Geração de jogos Inteligentes — Wizard CLI
 
-<!--ts-->
-   * [Instalação do interpretador Python](##Instalação-do-interpretador-Python)
-   * [Criação do ambiente virtual](##Criação-do-ambiente-virtual)
-   * [Projeto](##Projeto)
-      * [Estrutura do ambiente](###Estrutura-do-ambiente)
-      * [Inserir o projeto no ambiente](###Inserir-o-projeto-no-ambiente)
-      * [Inicializar o ambiente](###Inicializar-o-ambiente)
-      * [Baixar os pacotes e dependências](###Baixar-os-pacotes-e-dependências)
-      * [Criar resultados e combinações](###Criar-resultados-e-combinações)
-      * [Rodar o projeto](###Rodar-o-projeto)
-      * [Dúvidas e sugestões](###Dúvidas-e-sugestões)
-   * [Contribuição](##Contribuição)
-<!--te-->
+Arquivo:
 
-## Instalação do interpretador Python  
+wizard_cli.py
 
-O projeto utiliza o Python 3 na versão v3.8.2, e para melhor compatibilidade é recomendado que a versão seja mantida.
 
-[Download - Python 3 v3.8.2](https://www.python.org/downloads/release/python-382/)  
+O Wizard:
 
-## Criação do ambiente virtual  
+Lê combinações em chunks (50.000 por vez)
 
-Após a instalação do interpretador, versão do projeto, atualize o PIP (gerenciador de pacotes). Para tal, abrar o Prompt de comando ou o PowerShell, no caso do Windows, por exemplo, e execute o camando abaixo. Todos os comandos relacionados ao Python, a partir daqui, serão realizados utilizando o PowerShell do Windows.
+Analisa repetição com últimos concursos
 
-```
-python -m pip install --upgrade pip
-```
+Controla sequência máxima
 
-Após atualizar o PIP, crie o diretório que irá conter o projeto, sendo que o local fica de sua preferência. Esse diretório será o ambiente virtual que irá possuir o interpretador e os pacotes específicos para o projeto. Como exemplo, será utilizado o diretório `C:\ambientevirtual`. No PowerSell, desloque até o diretório raíz `C:\` aonde irá ser criado o ambiente e execute o comando:
+Pontua cobertura das dezenas
 
-```
-python -m venv ambientevirtual
-```
+Entrega apenas jogos selecionados
 
-Ao criar o ambiente virtual, você estará separando as parametrizações do projeto de outras alterações que possam ter no ambiente externo. Basicamente, você irá instalar neste ambiente somente as dependências que o projeto necessita para ser rodado.
+Dois modos disponíveis:
 
-## Projeto  
+Modo	Característica	Ideia
+Conservador	evita repetição com últimos concursos	"Jogue seguro"
+Agressivo	aceita mais sobreposição	"Jogue como o mercado aposta"
+🎯 COMO UTILIZAR LOCALMENTE
+▶️ 1. Instalar o interpretador Python
 
-### Estrutura do ambiente  
+Baixe Python 3.12:
 
-Ao acessar o ambiente você irá visualizar a estrutura abaixo:
+https://www.python.org/downloads/
 
-```
-C:\ambientevirtual
+▶️ 2. Criar ambiente virtual
 
-    \Include
-    \Lib
-    \Scripts
-    pyvenv.cfg
-```
+No terminal:
 
-Os diretórios principais são `Lib` e `Scripts` onde o primeiro irá armazenar os pacotes/dependências que serão utilizados no projeto e o outro o arquivo do interpretador assim como os arquivos para inicializar o ambiente, basicamente.
+python3 -m venv lotofacil-312
 
-### Inserir o projeto no ambiente  
 
-Para os próximos passos foi utilizado o GIT (ferramenta de versionamento). Caso ainda não saiba como utilizá-lo, existem inúmeros tutoriais no Youtube que poderão te auxiliar.
+Ativar ambiente:
 
-1. Faça um fork deste repositório clicando no botão `Fork` no canto superior da tela.
+MacOS:
 
-1. Dentro do diretório do ambiente virtual abra o Bash do GIT e inicialize o repositório local.
+source lotofacil-312/bin/activate
 
-    ```
-   $ git init
-   ```
 
-1. Faça um clone do repositório para a sua estação de trabalho:
+Windows:
 
-   ```
-   $ git clone https://github.com/<seu_usuario>/lotofacil
-   ```
+.\lotofacil-312\Scripts\Activate.ps1
 
-   Ob.: Será emitido um alerta de erro para o arquivo `lotofacil/base/resultados.csv` ao qual pode ser desconsiderado. O mesmo será criado posteriormente [Criar resultados e combinações](###Criar-resultados-e-combinações).
+▶️ 3. Instalar dependências
 
-### Inicializar o ambiente
+No diretório raiz do projeto:
 
-Agora que o projeto foi baixado para a sua máquina, se faz necessário inicializar o ambiente.
+pip install -r requirements.txt
 
-1. No PowerShell, direcione para o diretório `C:\ambientevirtual\Scripts` e execute o comando:
+▶️ 4. Atualizar base da Caixa
+python scripts/atualizar_base.py
 
-   ```
-   .\Activate.ps1
-   ```
 
-    Este comando irá inicializar o ambiente virtual. Para se certificar que o ambiente foi inicializado, neste caso, vai aparecer o nome do diretório entre parenteses (ambientevirtual), geralmente na cor verde, antes do caminho do diretório atual.
-    
-1. Para finalizar o ambiente, quando o mesmo não estiver em uso, é só executar o comando `deactivate` independente do diretório que estiver no PowerShell.
+Resultado salvo em:
 
-### Baixar os pacotes e dependências
+base/base_limpa.xlsx
 
-Para instalar os pacotes e dependências que o projeto irá utilizar, inicialize o ambiente e faça:
+▶️ 5. Gerar combinações
+python scripts/gerar_combinacoes.py
 
-1. Atualize o PIP [Criação do ambiente virtual](##Criação-do-ambiente-virtual), independente que já o tenha feito antes durante a criação do ambiente. Assim terá a certeza de estar utilizando a versão mais atual do gerenciador.
 
-1. Execute o comando abaixo no diretório raíz do projeto aonde contém o arquivo `requirements.txt`. Esse comando irá instalar os pacotes conforme a relação contida no arquivo.
+Isto cria:
 
-    ```
-    pip install -r requirements.txt
-    ```
-1. Agora é preciso instalar mais dois pacotes (TensorFlow e o XRLD):
+combinacoes/combinacoes.csv
 
-    ```
-    pip install tensorflow
-    ```
-    
-    ```
-    pip install xlrd==1.2.0
-    ```
+▶️ 6. Rodar o Wizard manualmente
 
-### Criar resultados e combinações
+Modo conservador:
 
-No PowerShell, vá para o diretório raíz do projeto e execute os comandos.
+python wizard_cli.py --modo conservador --ultimos 20 --finais 5
 
-1. Para criar o arquivo de resultados:
 
-    ```
-    python .\dados\scrapping_resultados.py
-    ```
+Modo agressivo:
 
-2. Para criar o arquivo de combinações:
-   Remova o CSV, que está no diretório combinacoes
+python wizard_cli.py --modo agressivo --ultimos 20 --finais 5
 
-    ```
-    python .\dados\gerar_combinacoes.py
-    ```
+🤖 EXECUÇÃO AUTOMÁTICA (GITHUB ACTIONS)
 
-### Rodar o projeto
+O projeto possui automação:
 
-Se todos os passos foram realizados e o ambiente está ativo, agora o projeto está pronto para ser executado. Para isso, execute o comando abaixo no diretório raíz do projeto:
+📄 Arquivo:
 
-```
-python .\jogar.py
-```
+.github/workflows/wizard.yml
 
-### Dúvidas, bugs e sugestões
 
-Em casos de dúvida, bugs ou queria propror uma melhoria abra uma Issue. Vamos aprender juntos e desenvolver novas soluções.
+A automação faz:
 
-## Contribuição
+Baixa o repositório
 
-Sinta-se livre para contrituir com o projeto. Para tal, faça:
+Instala Python
 
-1. Crie um remote apontando para este repositório:
+Instala dependências
 
-   ```
-   $ git remote add upstream https://github.com/Mekylei-Belchior/lotofacil
-   ```
+Atualiza base da Caixa
 
-1. Uma vez feito o fork, crie um branch de trabalho (por exemplo, "feature-x")
+Gera base limpa
 
-   ```
-   $ git checkout -b feature-x
-   ```
+Gera combinações (se quiser habilitar)
 
-1. Trabalhe normalmente no branch feature-x. Quando estiver satisfeito com o resultado, faça o commit e em seguida o push:
+Roda Wizard nos dois modos
 
-   ```
-   $ git push origin feature-x
-   ```
+Salva arquivos em /outputs/
 
-1. O branch usado no "git checkout" tem que casar com o branch usado no "git push".
+Faz commit automático
 
-1. Por fim, entre no github e abra um Pull Request (PR).
+🎯 Agendamento
+
+Você pediu para rodar:
+
+🕔 17h
+📅 Segunda a sexta-feira
+🕒 Horário de Brasília (UTC-3)
+
+O cron configurado é:
+
+- cron: "0 20 * * 1-5"
+
+📂 ESTRUTURA DO PROJETO
+lotofacil/
+│
+├── base/
+│   ├── base_limpa.xlsx
+│
+├── combinacoes/
+│   ├── combinacoes.csv   (ignorado pelo GitHub)
+│
+├── outputs/
+│   ├── jogos_agressivo_2026-01-13_13-59-04.txt
+│   ├── jogos_conservador_2026-01-13_13-59-04.txt
+│
+├── scripts/
+│   ├── atualizar_base.py
+│   ├── gerar_base_limpa.py
+│   ├── gerar_combinacoes.py
+│   ├── backtest.py
+│
+├── modelo/
+│   ├── modelo.py
+│
+├── wizard_cli.py
+├── jogar.py
+├── requirements.txt
+├── README.md
+
+📌 COMO VER RESULTADOS NO GITHUB
+
+Os jogos gerados ficam em:
+
+outputs/
+
+
+Via GitHub:
+
+➡ Entre em Code
+➡ Abra a pasta outputs/
+➡ Baixe o arquivo .txt
+
+🙋‍♂️ DÚVIDAS, BUGS E MELHORIAS
+
+Use Issues no GitHub para:
+
+Relatar problemas
+
+Sugerir melhorias
+
+Pedir novos filtros estatísticos
+
+🤝 CONTRIBUIÇÃO
+
+Faça fork do repositório
+
+Crie um branch de trabalho:
+
+git checkout -b feature-nova
+
+
+Faça suas alterações
+
+Envie para seu repositório:
+
+git push origin feature-nova
+
+
+Abra um Pull Request
+
+📜 AVISO IMPORTANTE
+
+Este projeto é educacional.
+Nenhum algoritmo garante resultados em jogos de azar.
+Use com moderação e responsabilidade. 🍀
