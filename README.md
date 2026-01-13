@@ -87,7 +87,10 @@ Dois modos disponíveis:
 Modo	Característica	Ideia
 Conservador	evita repetição com últimos concursos	"Jogue seguro"
 Agressivo	aceita mais sobreposição	"Jogue como o mercado aposta"
+
+
 🎯 COMO UTILIZAR LOCALMENTE
+
 ▶️ 1. Instalar o interpretador Python
 
 Baixe Python 3.12:
