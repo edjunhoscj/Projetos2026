@@ -1,13 +1,21 @@
-# Arquivo gigante (NÃO versionar)
+# Não enviar combinações gigantes para o GitHub
 combinacoes/combinacoes.csv
 
-# Saídas geradas
-outputs/
+# Pasta inteira (caso queira excluir tudo)
+combinacoes/
 
-# Arquivos de planilha grandes que você pode recriar
-base/base_dados_atualizada.xlsx
-base/base_limpa.xlsx
+# caches
+__pycache__/
+*.pyc
 
-# Ambientes virtuais (por precaução)
+# ambientes virtuais
+venv/
 lotofacil-312/
-.venv/
+lotofacil-venv/
+
+# arquivos temporários
+*.log
+*.tmp
+
+# arquivos de sistema macOS
+.DS_Store

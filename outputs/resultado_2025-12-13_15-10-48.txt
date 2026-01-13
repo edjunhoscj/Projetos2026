@@ -1,0 +1,9 @@
+Acuracidade do Modelo: 93.5%
+0 = Não tem chance (no modelo) | 1 = Tem chance (no modelo)
+Resultado (Previsão Modelo): 0.9997403025627136
+
+Score do modelo (0–100): 100.0%
+Obs.: isso NÃO é chance real de prêmio; é um score interno do modelo.
+
+Números sorteados: [2, 19, 17, 9, 21, 11, 5, 13, 10, 18, 12, 1, 20, 3, 6]
+Números ordenados: [1, 2, 3, 5, 6, 9, 10, 11, 12, 13, 17, 18, 19, 20, 21]
