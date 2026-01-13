@@ -2,7 +2,7 @@ name: Wizard Lotofacil Diário
 
 on:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "0 11 * * *"   # 11:00 UTC = 08:00 em Brasília
   workflow_dispatch:
     inputs:
       ultimos:
@@ -55,7 +55,7 @@ jobs:
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           mkdir -p outputs
-          DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
+          DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%H-%M-%S")
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
@@ -64,6 +64,40 @@ jobs:
           echo "Modo conservador..."
           python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
             > "outputs/jogos_conservador_${DATA}.txt"
+
+      # 🔥 NOVO: limpar arquivos antigos, manter apenas últimos 10 dias
+      - name: Limpar arquivos antigos (últimos 10 dias)
+        run: |
+          mkdir -p outputs
+
+          echo "Calculando datas a manter (últimos 10 dias)..."
+          KEYS=""
+          for i in $(seq 0 9); do
+            D=$(TZ="America/Sao_Paulo" date -d "-$i day" +"%d-%m-%Y")
+            KEYS="$KEYS $D"
+          done
+          echo "Datas mantidas: $KEYS"
+
+          cd outputs
+
+          for f in jogos_agressivo_*.txt jogos_conservador_*.txt; do
+            [ -e "$f" ] || continue
+
+            KEEP=false
+            for k in $KEYS; do
+              if echo "$f" | grep -q "$k"; then
+                KEEP=true
+                break
+              fi
+            done
+
+            if [ "$KEEP" = false ]; then
+              echo "Removendo arquivo antigo: $f"
+              rm -f "$f"
+            else
+              echo "Mantendo arquivo recente: $f"
+            fi
+          done
 
       - name: Commit e push
         run: |
