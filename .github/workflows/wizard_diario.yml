@@ -38,9 +38,9 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      - name: Atualizar base da Caixa (RAW)
+      - name: Atualizar base da Caixa (últimos 1000)
         run: |
-          python scripts/atualizar_base.py
+          python scripts/atualizar_base.py --ultimos 1000
 
       - name: Gerar base limpa
         run: |
