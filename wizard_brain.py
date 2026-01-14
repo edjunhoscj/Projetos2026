@@ -151,7 +151,7 @@ def calcular_score_inteligente(
     freq: Dict[int, int],   # alinhado com o wizard_cli
     modelo_cluster,         # não usado por enquanto (placeholder)
     config,                 # WizardConfig (tem modo, etc.)
-    escolhidos: List[tuple[int, ...]],
+    escolhidos,   # <<< mantenha esse nome
 ) -> float:
     """
     Versão "inteligente" do score, combinando:
