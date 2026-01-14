@@ -4,6 +4,7 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from wizard_brain import (
@@ -11,7 +12,6 @@ from wizard_brain import (
     clusterizar_concursos,
     calcular_score_inteligente,
 )
-from backtest import backtest_jogos
 
 print("\n========================================")
 print("        BACKTEST DOS JOGOS GERADOS      ")
