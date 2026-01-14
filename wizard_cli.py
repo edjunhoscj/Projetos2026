@@ -4,7 +4,6 @@ import argparse
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 
@@ -17,7 +16,7 @@ class WizardConfig:
     modo: str               # "agressivo" ou "conservador"
     ultimos: int            # quantos concursos recentes comparar
     jogos_finais: int       # quantos jogos o wizard deve entregar
-    max_seq_run: int = 4    # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
+    max_seq_run: int = 4    # máx. de dezenas consecutivas
     min_score: float = 0.0  # score mínimo para aceitar um jogo
 
 
@@ -69,7 +68,6 @@ def calcular_score_jogo(
     - Cobertura (preferir dezenas menos usadas nos jogos já escolhidos)
     - Penalizar jogos muito parecidos com concursos recentes
     """
-
     dezenas_set = set(dezenas)
 
     # 1) Cobertura
@@ -119,16 +117,15 @@ def escolher_jogos(
     if not comb_path.exists():
         raise FileNotFoundError(f"Arquivo de combinações não encontrado: {comb_path}")
 
-    # Lê tudo em memória (é reduzido: ~15k linhas)
+    # Lê tudo em memória (arquivo reduzido: ~15k linhas)
     comb_df = pd.read_csv(comb_path)
 
-    # Garante colunas D1..D15
     col_dezenas = [f"D{i}" for i in range(1, 16)]
     faltando = [c for c in col_dezenas if c not in comb_df.columns]
     if faltando:
         raise ValueError(f"Colunas D1..D15 faltando em {comb_path}: {faltando}")
 
-    # Embaralha para dar variedade mesmo com o mesmo arquivo
+    # Embaralha para dar variedade
     comb_df = comb_df.sample(frac=1.0, random_state=None).reset_index(drop=True)
 
     escolhidos: list[tuple[int, ...]] = []
