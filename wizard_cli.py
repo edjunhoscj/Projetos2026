@@ -13,14 +13,6 @@ from wizard_brain import (
     calcular_score_inteligente,
 )
 
-print("\n========================================")
-print("        BACKTEST DOS JOGOS GERADOS      ")
-print("========================================")
-
-for i, jogo in enumerate(jogos, start=1):
-    acertos = backtest_jogos(jogo, df)
-    print(f"Jogo {i:02d} — melhor resultado: {acertos} acertos")
-
 # =========================================
 #   CONFIGURAÇÃO DO WIZARD
 # =========================================
