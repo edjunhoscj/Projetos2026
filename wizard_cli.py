@@ -3,18 +3,18 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Dict, List, Set, Tuple
 
 import numpy as np
 import pandas as pd
 
-# Importa o "cérebro" adicional
+# Novo: importa o "cérebro"
 from wizard_brain import (
     detectar_quentes_frias,
     clusterizar_concursos,
     calcular_score_inteligente,
+    ClusterModel,
 )
-
 
 # =========================================
 #   CONFIGURAÇÃO DO WIZARD
@@ -22,18 +22,18 @@ from wizard_brain import (
 
 @dataclass
 class WizardConfig:
-    modo: str                # "agressivo" ou "conservador"
-    ultimos: int             # quantos concursos recentes comparar
-    jogos_finais: int        # quantos jogos o wizard deve entregar
-    max_seq_run: int = 4     # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
-    min_score: float = 0.0   # score mínimo para aceitar um jogo
+    modo: str               # "agressivo" ou "conservador"
+    ultimos: int            # quantos concursos recentes comparar
+    jogos_finais: int       # quantos jogos o wizard deve entregar
+    max_seq_run: int = 4    # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
+    min_score: float = 0.0  # score mínimo para aceitar um jogo
 
-    # Diversidade entre jogos finais
-    max_overlap_entre_jogos: int = 12  # máx. de dezenas em comum entre jogos finais
 
-    # Preferência pela “cauda” (20–25)
-    tail_min: int = 2        # mínimo desejado de dezenas na faixa 20–25
-    tail_max: int = 5        # máximo desejado (acima disso começa a “pesar”)
+# Globais para o cérebro (preenchidos em main)
+QUENTES: Set[int] = set()
+FRIAS: Set[int] = set()
+FREQ: Dict[int, int] = {}
+CLUSTER_MODEL: ClusterModel | None = None
 
 
 # =========================================
@@ -79,32 +79,6 @@ def respeita_sequencia_maxima(dezenas: list[int], max_seq_run: int) -> bool:
     return True
 
 
-def contar_dezenas_faixa(dezenas: Iterable[int], inicio: int, fim: int) -> int:
-    """
-    Conta quantas dezenas de `dezenas` estão no intervalo [inicio, fim].
-    Ex.: faixa 20–25 para olhar a “cauda alta”.
-    """
-    return sum(1 for d in dezenas if inicio <= d <= fim)
-
-
-def jogos_suficientemente_diferentes(
-    candidato: tuple[int, ...],
-    escolhidos: list[tuple[int, ...]],
-    max_overlap: int,
-) -> bool:
-    """
-    Garante diversidade entre jogos finais:
-    - rejeita se o candidato tiver mais do que `max_overlap` dezenas em comum
-      com qualquer jogo já escolhido.
-    """
-    cand_set = set(candidato)
-    for jogo in escolhidos:
-        inter = len(cand_set.intersection(jogo))
-        if inter > max_overlap:
-            return False
-    return True
-
-
 # =========================================
 #   ESCOLHA DE JOGOS A PARTIR DE COMBINAÇÕES
 # =========================================
@@ -113,10 +87,6 @@ def escolher_jogos(
     comb_path: Path,
     ultimos_df: pd.DataFrame,
     config: WizardConfig,
-    quentes: set[int],
-    frias: set[int],
-    freq: dict[int, int],
-    modelo_cluster,
 ) -> list[tuple[int, ...]]:
     """
     Lê combinacoes/combinacoes.csv em chunks e escolhe jogos
@@ -125,9 +95,10 @@ def escolher_jogos(
     - evitar repetir demais os últimos concursos
     - boa cobertura de dezenas
     - respeitar limite de sequência de números consecutivos
-    - dar preferência a dezenas da cauda (20–25) dentro de uma faixa
-    - garantir diversidade entre os jogos finais
+    - usar quentes/frias, clusters e diversidade
     """
+
+    global QUENTES, FRIAS, FREQ, CLUSTER_MODEL
 
     modo = config.modo
     jogos_finais = config.jogos_finais
@@ -154,14 +125,8 @@ def escolher_jogos(
     chunk_size = 50_000
     reader = pd.read_csv(comb_path, header=None, chunksize=chunk_size)
 
-    rng = np.random.default_rng()  # para embaralhar linhas dentro do chunk
-
     for chunk_idx, chunk in enumerate(reader, start=1):
         print(f"  -> Processando chunk {chunk_idx} ({len(chunk)} linhas)")
-
-        # Embaralha o chunk para não ficar preso no início do CSV
-        # (quebra o "vício" de sempre pegar as primeiras combinações boas)
-        chunk = chunk.sample(frac=1.0, random_state=rng.integers(0, 1_000_000))
 
         for _, row in chunk.iterrows():
             # Cada row tem UMA coluna: a string "01 02 03 ... 15"
@@ -191,50 +156,23 @@ def escolher_jogos(
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) Score “inteligente” vindo do wizard_brain
-            score_base = calcular_score_inteligente(
+            # 3) Score inteligente (cobertura + quentes/frias + clusters + diversidade)
+            score = calcular_score_inteligente(
                 dezenas=dezenas,
                 ultimos_tuplas=ultimos_tuplas,
                 cobertura_contagem=cobertura_contagem,
-                quentes=quentes,
-                frias=frias,
-                freq=freq,
-                modelo_cluster=modelo_cluster,
+                quentes=QUENTES,
+                frias=FRIAS,
+                freq=FREQ,
+                modelo_cluster=CLUSTER_MODEL,
                 config=config,
-                jogos_escolhidos=escolhidos,
+                escolhidos=escolhidos,
             )
 
-            score = float(score_base)
-
-            # 4) Ajuste de cauda (20–25)
-            qtd_tail = contar_dezenas_faixa(dezenas, 20, 25)
-
-            # Se não tem nenhuma na cauda, penaliza forte
-            if qtd_tail == 0:
-                score -= 1.5
-            else:
-                # Faixa ideal: [tail_min, tail_max]
-                if config.tail_min <= qtd_tail <= config.tail_max:
-                    # bônus proporcional, mas limitado
-                    score += 0.3 * qtd_tail
-                elif qtd_tail > config.tail_max:
-                    # muita cauda, dá um leve "peso"
-                    score -= 0.2 * (qtd_tail - config.tail_max)
-
-            # Se ainda assim o score ficar abaixo do mínimo, pula
             if score < min_score:
                 continue
 
-            # 5) Diversidade entre jogos finais
-            if not jogos_suficientemente_diferentes(
-                jogo_tupla,
-                escolhidos,
-                max_overlap=config.max_overlap_entre_jogos,
-            ):
-                # Candidato muito parecido com algum já escolhido
-                continue
-
-            # 6) Atualiza cobertura
+            # 4) Atualiza cobertura
             for d in dezenas:
                 cobertura_contagem[d] += 1
 
@@ -273,6 +211,8 @@ def imprimir_resumo(jogos: list[tuple[int, ...]], config: WizardConfig) -> None:
 # =========================================
 
 def main() -> None:
+    global QUENTES, FRIAS, FREQ, CLUSTER_MODEL
+
     parser = argparse.ArgumentParser(
         description="Wizard Lotofácil - gera jogos filtrando combinações."
     )
@@ -306,9 +246,6 @@ def main() -> None:
         jogos_finais=args.finais,
         max_seq_run=4,
         min_score=0.0,   # se quiser filtrar mais forte, aumentar esse valor
-        max_overlap_entre_jogos=12,
-        tail_min=2,
-        tail_max=5,
     )
 
     print("========================================")
@@ -325,28 +262,18 @@ def main() -> None:
     base_df = carregar_base(base_path)
     ultimos_df = pegar_ultimos_concursos(base_df, config.ultimos)
 
-    # 2) Calcula inteligência extra (quentes/frias, clusters) com base completa
-    print("🧠 Calculando dezenas quentes/frias e clusters...")
-    quentes, frias, freq = detectar_quentes_frias(
+    # 2) Estatísticas inteligentes (quentes/frias + clusters)
+    QUENTES, FRIAS, FREQ = detectar_quentes_frias(
         base_df,
-        janela=200,    # janela de concursos recentes para análise de calor
-        top_n=8,       # top N quentes / frias
+        n_ultimos=max(config.ultimos, 100),  # garante janela razoável
     )
-    modelo_cluster = clusterizar_concursos(
+    CLUSTER_MODEL = clusterizar_concursos(
         base_df,
-        n_clusters=5,  # número de clusters pra agrupar padrões de sorteios
+        n_ultimos=max(config.ultimos, 100),
     )
 
     # 3) Escolhe jogos
-    jogos = escolher_jogos(
-        comb_path=comb_path,
-        ultimos_df=ultimos_df,
-        config=config,
-        quentes=quentes,
-        frias=frias,
-        freq=freq,
-        modelo_cluster=modelo_cluster,
-    )
+    jogos = escolher_jogos(comb_path, ultimos_df, config)
 
     # 4) Imprime resumo
     imprimir_resumo(jogos, config)
