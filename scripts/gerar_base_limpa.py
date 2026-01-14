@@ -1,59 +1,61 @@
-import pandas as pd
 from pathlib import Path
 
+import pandas as pd
 
-def is_dezena(x):
-    return isinstance(x, (int, float)) and pd.notna(x) and 1 <= int(x) <= 25
+BASE_PATH = Path(__file__).resolve().parents[1] / "base"
+ARQ_RAW = BASE_PATH / "base_raw.xlsx"
+ARQ_LIMPO = BASE_PATH / "base_limpa.xlsx"
 
 
-def main():
-    base_path = Path(__file__).resolve().parents[1] / "base" / "base_dados.xlsx"
-    raw = pd.read_excel(base_path, header=None)
-
-    rows = []
-    for r in range(len(raw)):
-        # pega a linha e tenta extrair números 1..25
-        vals = raw.iloc[r].tolist()
-        nums = [int(v) for v in vals if is_dezena(v)]
-
-        # um sorteio da lotofácil tem 15 dezenas distintas
-        if len(nums) >= 15:
-            # tenta manter só 15 primeiras distintas preservando ordem
-            seen = set()
-            dezenas = []
-            for n in nums:
-                if n not in seen:
-                    seen.add(n)
-                    dezenas.append(n)
-                if len(dezenas) == 15:
-                    break
-
-            if len(dezenas) == 15:
-                rows.append(dezenas)
-
-    if not rows:
-        raise ValueError(
-            "Não consegui extrair nenhum sorteio (15 dezenas) da planilha. "
-            "Sua base está muito fora do padrão esperado."
+def gerar_base_limpa():
+    if not ARQ_RAW.exists():
+        raise FileNotFoundError(
+            f"Arquivo RAW não encontrado: {ARQ_RAW}\n"
+            "Rode antes: python scripts/atualizar_base.py"
         )
 
-    # Cria dataframe: Concurso sequencial + D1..D15
-    out = pd.DataFrame(rows, columns=[f"D{i}" for i in range(1, 16)])
-    out.insert(0, "Concurso", range(1, len(out) + 1))
+    print(f"🧹 Lendo base RAW: {ARQ_RAW}")
+    df = pd.read_excel(ARQ_RAW)
 
-    # Cria Ciclo (a cada 25 concursos)
-    tamanho = 25
-    out["Ciclo"] = ((out["Concurso"] - out["Concurso"].min()) // tamanho) + 1
+    # Garante colunas esperadas
+    esperadas = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
+    faltando = [c for c in esperadas if c not in df.columns]
+    if faltando:
+        raise ValueError(f"Colunas faltando na base RAW: {faltando}")
 
-    saida = base_path.with_name("base_limpa.xlsx")
-    out.to_excel(saida, index=False)
+    # Tipos corretos
+    df["Concurso"] = df["Concurso"].astype(int)
+    for i in range(1, 16):
+        df[f"D{i}"] = df[f"D{i}"].astype(int)
+
+    # Ordenar por concurso
+    df = df.sort_values("Concurso").reset_index(drop=True)
+
+    # Calcular Ciclo simples: reseta quando fecha 25 dezenas
+    ciclo_atual = 1
+    usadas = set()
+    ciclos = []
+
+    for _, row in df.iterrows():
+        dezenas = {int(row[f"D{i}"]) for i in range(1, 16)}
+        usadas |= dezenas
+        ciclos.append(ciclo_atual)
+
+        if len(usadas) == 25:
+            usadas.clear()
+            ciclo_atual += 1
+
+    df["Ciclo"] = ciclos
+
+    df.to_excel(ARQ_LIMPO, index=False)
 
     print("✅ Base limpa criada com sucesso:")
-    print(saida)
-    print("Colunas:", list(out.columns))
-    print("Total de linhas:", len(out))
-    print(out.head(3))
+    print(f"📁 {ARQ_LIMPO}")
+    print(f"Total de linhas: {len(df)}")
+    print(f"Colunas: {list(df.columns)}")
+    print()
+    print(df.head(3))
 
 
 if __name__ == "__main__":
-    main()
+    gerar_base_limpa()
