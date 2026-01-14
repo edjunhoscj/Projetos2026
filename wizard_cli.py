@@ -11,7 +11,7 @@ from wizard_brain import (
     detectar_quentes_frias,
     clusterizar_concursos,
     calcular_score_inteligente,
-    BrainConfig,
+    EstatisticasWizard,
 )
 
 
@@ -54,7 +54,7 @@ def pegar_ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
     return df.tail(n).reset_index(drop=True)
 
 
-def respeita_sequencia_maxima(dezenas: list[int], max_seq_run: int) -> bool:
+def respeita_sequencia_maxima(dezenas: List[int], max_seq_run: int) -> bool:
     """
     Verifica se não há mais do que `max_seq_run` dezenas consecutivas.
     Ex.: [1,2,3,4,7,...] com max_seq_run=4 OK; se tivesse 1..5 -> quebra.
@@ -71,6 +71,23 @@ def respeita_sequencia_maxima(dezenas: list[int], max_seq_run: int) -> bool:
     return True
 
 
+def conta_blocos(dezenas: List[int]) -> Tuple[int, int, int]:
+    """
+    Conta quantas dezenas caem em cada bloco:
+    - bloco1: 1..9
+    - bloco2: 10..19
+    - bloco3: 20..25
+    """
+    b1 = sum(1 for d in dezenas if 1 <= d <= 9)
+    b2 = sum(1 for d in dezenas if 10 <= d <= 19)
+    b3 = sum(1 for d in dezenas if 20 <= d <= 25)
+    return b1, b2, b3
+
+
+def conta_pares(dezenas: List[int]) -> int:
+    return sum(1 for d in dezenas if d % 2 == 0)
+
+
 # =========================================
 #   ESCOLHA DE JOGOS A PARTIR DE COMBINAÇÕES
 # =========================================
@@ -79,12 +96,8 @@ def escolher_jogos(
     comb_path: Path,
     ultimos_df: pd.DataFrame,
     config: WizardConfig,
-    quentes: Set[int],
-    frias: Set[int],
-    freq: Dict[int, int],
-    clusters: Dict[Tuple[int, ...], int],
-    brain_cfg: BrainConfig,
-) -> list[tuple[int, ...]]:
+    estat: EstatisticasWizard,
+) -> List[Tuple[int, ...]]:
     """
     Lê combinacoes/combinacoes.csv em chunks e escolhe jogos
     conforme o modo (agressivo/conservador), priorizando:
@@ -92,10 +105,10 @@ def escolher_jogos(
     - evitar repetir demais os últimos concursos
     - boa cobertura de dezenas
     - respeitar limite de sequência de números consecutivos
-    - priorizar dezenas quentes
-    - dar espaço também para dezenas frias
-    - incentivar dezenas 20..25
-    - garantir diversidade entre os jogos finais
+    - respeitar blocos 1–9 / 10–19 / 20–25
+    - respeitar faixa de pares/ímpares
+    - incentivar dezenas quentes e evitar frias
+    - manter diversidade entre os próprios jogos gerados
     """
 
     modo = config.modo
@@ -109,16 +122,16 @@ def escolher_jogos(
     if not comb_path.exists():
         raise FileNotFoundError(f"Arquivo de combinações não encontrado: {comb_path}")
 
-    escolhidos: list[tuple[int, ...]] = []
+    escolhidos: List[Tuple[int, ...]] = []
 
     # Set com tuplas dos últimos concursos para evitar repetição exata
-    ultimos_tuplas: set[tuple[int, ...]] = set()
+    ultimos_tuplas: Set[Tuple[int, ...]] = set()
     for _, linha in ultimos_df.iterrows():
         dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
         ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
 
     # Cobertura: contagem de frequência das dezenas nos escolhidos até agora
-    cobertura_contagem: dict[int, int] = {d: 0 for d in range(1, 26)}
+    cobertura_contagem: Dict[int, int] = {d: 0 for d in range(1, 26)}
 
     chunk_size = 50_000
     reader = pd.read_csv(comb_path, header=None, chunksize=chunk_size)
@@ -154,24 +167,47 @@ def escolher_jogos(
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) Score inteligente
+            # 3) Controle de blocos (1–9 / 10–19 / 20–25)
+            b1, b2, b3 = conta_blocos(dezenas)
+            # faixa típica observada na análise real
+            if not (6 <= b1 <= 8):
+                continue
+            if not (4 <= b2 <= 6):
+                continue
+            if not (3 <= b3 <= 5):
+                continue
+
+            # 4) Controle de pares
+            qtd_pares = conta_pares(dezenas)
+            if not (6 <= qtd_pares <= 9):
+                continue
+
+            # 5) Similaridade dura com últimos concursos:
+            #    não aceitar jogos com muita repetição
+            dezenas_set = set(dezenas)
+            max_overlap = 0
+            for ult in ultimos_tuplas:
+                inter = len(dezenas_set.intersection(ult))
+                if inter > max_overlap:
+                    max_overlap = inter
+            # limite bruto (acima disso nem calcula score)
+            if max_overlap > 13:
+                continue
+
+            # 6) Score inteligente combinando tudo
             score = calcular_score_inteligente(
-                dezenas=dezenas,
-                ultimos_tuplas=ultimos_tuplas,
-                cobertura_contagem=cobertura_contagem,
-                quentes=quentes,
-                frias=frias,
-                freq=freq,
-                clusters=clusters,
-                config_wizard=config,
-                brain_cfg=brain_cfg,
-                escolhidos=escolhidos,
+                dezenas,
+                ultimos_tuplas,
+                cobertura_contagem,
+                estat,
+                config,
+                escolhidos,
             )
 
             if score < min_score:
                 continue
 
-            # 4) Atualiza cobertura
+            # 7) Atualiza cobertura
             for d in dezenas:
                 cobertura_contagem[d] += 1
 
@@ -191,7 +227,7 @@ def escolher_jogos(
 #   IMPRESSÃO / RESUMO FINAL
 # =========================================
 
-def imprimir_resumo(jogos: list[tuple[int, ...]], config: WizardConfig) -> None:
+def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
     print("\n========================================")
     print("        JOGOS GERADOS PELO WIZARD       ")
     print("========================================")
@@ -245,8 +281,6 @@ def main() -> None:
         min_score=0.0,   # se quiser filtrar mais forte, aumentar esse valor
     )
 
-    brain_cfg = BrainConfig()  # usa os pesos padrão definidos no wizard_brain
-
     print("========================================")
     print("     WIZARD LOTOFÁCIL - CLI")
     print("========================================")
@@ -261,28 +295,14 @@ def main() -> None:
     base_df = carregar_base(base_path)
     ultimos_df = pegar_ultimos_concursos(base_df, config.ultimos)
 
-    # 2) Calcula quentes / frias / frequências com base na janela de análise
-    quentes, frias, freq = detectar_quentes_frias(
-        base_df,
-        janela=max(config.ultimos, 200)  # garante janela razoável
-    )
+    # 2) Estatísticas (quentes/frias, frequências, etc.)
+    estat = detectar_quentes_frias(base_df, ultimos=200)
+    _ = clusterizar_concursos(base_df)  # por enquanto não usado, mas deixa pronto
 
-    # 3) Cluster simples dos concursos históricos
-    clusters = clusterizar_concursos(base_df)
+    # 3) Escolhe jogos
+    jogos = escolher_jogos(comb_path, ultimos_df, config, estat)
 
-    # 4) Escolhe jogos
-    jogos = escolher_jogos(
-        comb_path=comb_path,
-        ultimos_df=ultimos_df,
-        config=config,
-        quentes=quentes,
-        frias=frias,
-        freq=freq,
-        clusters=clusters,
-        brain_cfg=brain_cfg,
-    )
-
-    # 5) Imprime resumo
+    # 4) Imprime resumo
     imprimir_resumo(jogos, config)
 
 
