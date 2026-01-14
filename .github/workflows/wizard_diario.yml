@@ -48,7 +48,7 @@ jobs:
 
       - name: Gerar combinações
         run: |
-          python scripts/gerar_combinacoes.py
+          python combinacoes/gerar_combinacoes.py
 
       - name: Rodar Wizard (agressivo e conservador)
         env:
