@@ -79,6 +79,10 @@ jobs:
             --ultimos 200 \
             --csv-out "outputs/backtest_conservador_${DATA}.csv"
 
+      - name: Gerar dashboard (PNG + CSV)
+        run: |
+          python scripts/dashboard.py
+
       - name: Commit e push dos resultados
         run: |
           git config --global user.name "github-actions[bot]"
