@@ -158,7 +158,7 @@ def escolher_jogos(
                 freq=freq,
                 modelo_cluster=modelo_cluster,
                 config=config,
-                jogos_ja_escolhidos=escolhidos,
+                escolhidos=escolhidos,
             )
 
             if score < min_score:
