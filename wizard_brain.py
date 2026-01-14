@@ -1,246 +1,236 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Sequence, Set, Tuple, Any
+from pathlib import Path
+from typing import Dict, Iterable, List, Sequence, Set, Tuple
 
 import numpy as np
 import pandas as pd
 
 
-# =========================================
-#   MODELO SIMPLES DE "CLUSTERS"
-# =========================================
+# -----------------------------------------
+# Config extra do Wizard (aproveitada pelo CLI)
+# -----------------------------------------
 
 @dataclass
-class ClusterModel:
+class BrainConfig:
     """
-    Modelo bem leve só para dar contexto estatístico aos jogos.
-
-    - media_global: frequência média (0..1) de cada dezena (1..25) em toda a base
-    - media_recentes: frequência média nas últimas N dezenas
+    Parâmetros finos usados no cálculo do score.
+    Você pode ajustar pesos aqui se quiser "afinar" o comportamento.
     """
-    media_global: np.ndarray  # shape (25,)
-    media_recentes: np.ndarray  # shape (25,)
+    # pesos dos componentes
+    peso_cobertura: float = 1.0
+    peso_quentes: float = 0.8
+    peso_frias: float = 0.3
+    peso_bonus_20_25: float = 0.6
+
+    # penalidades
+    penalidade_base_conservador: float = 1.0
+    penalidade_base_agressivo: float = 0.5
+
+    # diversidade
+    min_diferenca_entre_jogos: int = 3   # mínimo de dezenas diferentes entre dois jogos finais
+    penalidade_diversidade: float = 0.7  # o quanto "pesa" ficar muito parecido com jogos já escolhidos
 
 
-# =========================================
-#   HELPERS
-# =========================================
-
-def _df_para_matriz_binaria(df: pd.DataFrame) -> np.ndarray:
-    """
-    Converte a base em uma matriz binária (n_concursos x 25),
-    onde cada linha é um concurso e cada coluna indica se a dezena 1..25 saiu (1) ou não (0).
-    """
-    n = len(df)
-    mat = np.zeros((n, 25), dtype=np.float32)
-
-    cols_dezenas = [f"D{i}" for i in range(1, 16)]
-
-    for idx, row in df[cols_dezenas].iterrows():
-        for d in row.values:
-            if 1 <= int(d) <= 25:
-                mat[idx, int(d) - 1] = 1.0
-
-    return mat
-
-
-# =========================================
-#   QUENTES / FRIAS
-# =========================================
+# -----------------------------------------
+# 1) Detecção de dezenas quentes / frias
+# -----------------------------------------
 
 def detectar_quentes_frias(
     df: pd.DataFrame,
-    n_ultimos: int = 200,
-    top_k: int = 8,
-) -> Tuple[Set[int], Set[int], Dict[int, int]]:
+    janela: int = 200,
+    top_n: int = 10,
+    bottom_n: int = 10,
+) -> tuple[Set[int], Set[int], Dict[int, int]]:
     """
-    Analisa os últimos N concursos e devolve:
+    Olha apenas os últimos `janela` concursos e calcula:
       - quentes: dezenas mais frequentes
       - frias: dezenas menos frequentes
-      - freq: dict com contagem absoluta em N concursos
-    """
+      - freq: dict {dezena -> frequência absoluta}
 
+    Retorna (quentes, frias, freq).
+    """
     if len(df) == 0:
-        return set(), set(), {d: 0 for d in range(1, 26)}
+        return set(), set(), {}
 
-    # Garante que n_ultimos não passe do tamanho da base
-    fatia = df.tail(min(n_ultimos, len(df)))
+    ultimos_df = df.tail(janela)
 
-    contagem = {d: 0 for d in range(1, 26)}
-    cols_dezenas = [f"D{i}" for i in range(1, 16)]
+    dezenas_cols = [c for c in ultimos_df.columns if c.startswith("D")]
+    valores = ultimos_df[dezenas_cols].values.ravel()
 
-    for _, row in fatia[cols_dezenas].iterrows():
-        for d in row.values:
-            d_int = int(d)
-            if 1 <= d_int <= 25:
-                contagem[d_int] += 1
+    # garante inteiros 1..25
+    valores = pd.Series(valores).astype(int)
+    contagem = valores.value_counts().sort_values(ascending=False)
 
-    # Ordena por frequência
-    ordenado = sorted(contagem.items(), key=lambda x: x[1], reverse=True)
-    # top_k mais quentes
-    quentes = {d for d, _ in ordenado[:top_k]}
-    # top_k mais frias (do fim)
-    frias = {d for d, _ in ordenado[-top_k:]}
+    freq = {int(k): int(v) for k, v in contagem.items()}
 
-    return quentes, frias, contagem
+    quentes = set(contagem.head(top_n).index.astype(int))
+    frias = set(contagem.tail(bottom_n).index.astype(int))
+
+    return quentes, frias, freq
 
 
-# =========================================
-#   "CLUSTERIZAÇÃO" (RESUMO ESTATÍSTICO)
-# =========================================
+# -----------------------------------------
+# 2) "Clusterização" simples dos concursos
+# -----------------------------------------
 
-def clusterizar_concursos(
-    df: pd.DataFrame,
-    n_ultimos: int = 200,
-) -> ClusterModel:
+def clusterizar_concursos(df: pd.DataFrame) -> Dict[Tuple[int, ...], int]:
     """
-    NÃO usa sklearn (para ficar leve no GitHub Actions).
-    Apenas calcula vetores médios (global e recentes) em espaço 25D,
-    representando o "estilo" médio dos concursos.
-    """
+    Cria clusters bem simples com base na SOMA das dezenas de cada concurso.
 
+    - soma baixa  -> cluster 0
+    - soma média  -> cluster 1
+    - soma alta   -> cluster 2
+
+    Retorna um dicionário: {tupla_dezenas_ordenadas -> id_do_cluster}
+    """
     if len(df) == 0:
-        media_zero = np.zeros(25, dtype=np.float32)
-        return ClusterModel(media_global=media_zero, media_recentes=media_zero)
+        return {}
 
-    mat = _df_para_matriz_binaria(df)
-    media_global = mat.mean(axis=0)
+    dezenas_cols = [c for c in df.columns if c.startswith("D")]
 
-    # Últimos N concursos
-    mat_recent = mat[-min(n_ultimos, len(df)) :, :]
-    media_recentes = mat_recent.mean(axis=0)
+    somas = df[dezenas_cols].sum(axis=1).values
+    q1, q2 = np.quantile(somas, [0.33, 0.66])
 
-    return ClusterModel(
-        media_global=media_global.astype(np.float32),
-        media_recentes=media_recentes.astype(np.float32),
-    )
+    clusters: Dict[Tuple[int, ...], int] = {}
+
+    for _, row in df.iterrows():
+        dezenas = tuple(sorted(int(row[c]) for c in dezenas_cols))
+        s = sum(dezenas)
+        if s <= q1:
+            c_id = 0
+        elif s <= q2:
+            c_id = 1
+        else:
+            c_id = 2
+        clusters[dezenas] = c_id
+
+    return clusters
 
 
-# =========================================
-#   SCORE INTELIGENTE
-# =========================================
+# -----------------------------------------
+# 3) Cálculo do score inteligente
+# -----------------------------------------
 
-def _cos_sim(a: np.ndarray, b: np.ndarray) -> float:
-    denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
-    if denom == 0:
-        return 0.0
-    return float(np.dot(a, b) / denom)
+def _cluster_de_um_jogo(
+    dezenas: Sequence[int],
+    clusters_existentes: Dict[Tuple[int, ...], int],
+) -> int | None:
+    """
+    Tenta achar o cluster de um jogo com base na soma.
+    Se não existir na base, aproxima pela soma vs quantis.
+    (fallback simples para não quebrar o fluxo).
+    """
+    t = tuple(sorted(dezenas))
+    if t in clusters_existentes:
+        return clusters_existentes[t]
+
+    # aproxima pelo mesmo critério da criação
+    somas = np.array([sum(k) for k in clusters_existentes.keys()])
+    if len(somas) == 0:
+        return None
+    q1, q2 = np.quantile(somas, [0.33, 0.66])
+    s = sum(dezenas)
+    if s <= q1:
+        return 0
+    elif s <= q2:
+        return 1
+    else:
+        return 2
 
 
 def calcular_score_inteligente(
-    dezenas: Sequence[int],
+    dezenas: list[int],
     ultimos_tuplas: Set[Tuple[int, ...]],
     cobertura_contagem: Dict[int, int],
     quentes: Set[int],
     frias: Set[int],
     freq: Dict[int, int],
-    modelo_cluster: ClusterModel,
-    config: Any,  # WizardConfig (evita import circular)
+    clusters: Dict[Tuple[int, ...], int],
+    config_wizard,        # WizardConfig (do CLI)
+    brain_cfg: BrainConfig,
     escolhidos: List[Tuple[int, ...]],
 ) -> float:
     """
-    Heurística de score:
-
-    1) Cobertura: prioriza dezenas pouco usadas nos jogos já escolhidos
-    2) Quentes/Frias:
-       - agressivo: puxa mais quentes, evita frias
-       - conservador: busca equilíbrio entre quentes/frias
-    3) Distância dos últimos concursos (não ser cópia)
-    4) Similaridade com "estilo" médio recente (cluster)
-    5) Diversidade entre os próprios jogos escolhidos
+    Calcula um score combinando:
+      - cobertura de dezenas (preferir números ainda pouco usados nos jogos escolhidos)
+      - proximidade dos últimos concursos (penaliza jogos muito parecidos)
+      - bônus para dezenas quentes
+      - leve bônus para dezenas frias (busca equilíbrio)
+      - bônus específico para dezenas 20..25
+      - diversidade entre jogos finais
+      - distribuição de clusters (evitar todos os jogos no mesmo "tipo")
     """
 
-    dezenas = sorted(int(d) for d in dezenas)
     dezenas_set = set(dezenas)
 
-    # -------------------------
-    # 1) Cobertura
-    # -------------------------
+    # 1) Cobertura: 1 / (1 + freq_escolhidos_ate_agora)
     cobertura_score = 0.0
     for d in dezenas:
-        freq_d = cobertura_contagem.get(d, 0)
-        # quanto menos apareceu nos jogos ESCOLHIDOS até agora, maior o ganho
-        cobertura_score += 1.0 / (1.0 + freq_d)
+        freq_escolhida = cobertura_contagem.get(d, 0)
+        cobertura_score += 1.0 / (1.0 + freq_escolhida)
 
-    # -------------------------
-    # 2) Quentes / Frias
-    # -------------------------
-    qtd_quentes = len(dezenas_set & quentes)
-    qtd_frias = len(dezenas_set & frias)
-
-    if getattr(config, "modo", "conservador") == "agressivo":
-        # agressivo: quer puxar mais as dezenas quentes
-        bonus_quentes = 0.40 * qtd_quentes
-        penal_frias = 0.25 * qtd_frias
-        hf_score = bonus_quentes - penal_frias
-    else:
-        # conservador: busca equilíbrio (nem poucas, nem muitas quentes)
-        # alvo: entre 5 e 9 quentes
-        alvo_min, alvo_max = 5, 9
-        if qtd_quentes < alvo_min:
-            desvio = alvo_min - qtd_quentes
-        elif qtd_quentes > alvo_max:
-            desvio = qtd_quentes - alvo_max
-        else:
-            desvio = 0
-        hf_score = 2.0 - 0.4 * desvio - 0.1 * qtd_frias  # começa de 2 e vai caindo
-
-    # -------------------------
-    # 3) Sobreposição com últimos concursos
-    # -------------------------
-    max_overlap = 0
+    # 2) Semelhança com últimos concursos
+    max_overlap_ultimos = 0
     for ult in ultimos_tuplas:
         inter = len(dezenas_set.intersection(ult))
-        if inter > max_overlap:
-            max_overlap = inter
+        if inter > max_overlap_ultimos:
+            max_overlap_ultimos = inter
 
-    if getattr(config, "modo", "conservador") == "conservador":
-        # conservador: penaliza se sobrepõe demais (>= 11 repetidas)
-        penal_ultimos = max(0, max_overlap - 10) * 0.8
+    if config_wizard.modo == "conservador":
+        base_pen = brain_cfg.penalidade_base_conservador
+        limite = 9  # acima disso começa a pesar forte
     else:
-        # agressivo: aceita mais sobreposição, só pesa se ficar muito alto
-        penal_ultimos = max(0, max_overlap - 12) * 0.5
+        base_pen = brain_cfg.penalidade_base_agressivo
+        limite = 11
 
-    # -------------------------
-    # 4) Similaridade com estilo médio (clusters)
-    # -------------------------
-    jogo_vec = np.zeros(25, dtype=np.float32)
-    for d in dezenas:
-        if 1 <= d <= 25:
-            jogo_vec[d - 1] = 1.0
+    penalidade_ultimos = base_pen * max(0, max_overlap_ultimos - limite)
 
-    cos_recent = _cos_sim(jogo_vec, modelo_cluster.media_recentes)
-    # Em geral cos_recent fica entre ~0.35 e ~0.85
+    # 3) Bônus quentes / frias
+    qtd_quentes = len([d for d in dezenas if d in quentes])
+    qtd_frias = len([d for d in dezenas if d in frias])
 
-    if getattr(config, "modo", "conservador") == "conservador":
-        # conservador quer um jogo parecido, mas não idêntico
-        # alvo de similaridade ~0.7
-        cluster_score = 1.5 - abs(cos_recent - 0.7) * 3.0
-    else:
-        # agressivo quer surfar forte a tendência recente
-        cluster_score = cos_recent * 2.5  # [0..2.5 aprox]
+    bonus_quentes = brain_cfg.peso_quentes * (qtd_quentes / len(dezenas))
+    bonus_frias = brain_cfg.peso_frias * (qtd_frias / len(dezenas))
 
-    # -------------------------
-    # 5) Diversidade entre os jogos escolhidos
-    # -------------------------
-    penal_diversidade = 0.0
+    # 4) Bônus para dezenas 20..25
+    qtd_20_25 = len([d for d in dezenas if d >= 20])
+    bonus_20_25 = brain_cfg.peso_bonus_20_25 * (qtd_20_25 / len(dezenas))
+
+    # 5) Diversidade entre jogos finais já escolhidos
+    penalidade_diversidade_total = 0.0
     for j in escolhidos:
-        inter = len(dezenas_set.intersection(set(j)))
-        if inter >= 13:
-            penal_diversidade += (inter - 12) * 0.7
-        elif inter >= 11:
-            penal_diversidade += (inter - 10) * 0.3
+        inter = len(dezenas_set.intersection(j))
+        diferencas = len(dezenas) - inter
+        if diferencas < brain_cfg.min_diferenca_entre_jogos:
+            # jogo muito parecido → penaliza forte
+            penalidade_diversidade_total += brain_cfg.penalidade_diversidade
 
-    # -------------------------
+    # 6) Cluster: evita todos no mesmo tipo
+    cluster_atual = _cluster_de_um_jogo(dezenas, clusters)
+    penalidade_cluster = 0.0
+    if cluster_atual is not None and escolhidos:
+        clusters_escolhidos = [
+            _cluster_de_um_jogo(list(j), clusters) for j in escolhidos
+        ]
+        clusters_escolhidos = [c for c in clusters_escolhidos if c is not None]
+        if clusters_escolhidos:
+            proporcao_mesmo = sum(
+                1 for c in clusters_escolhidos if c == cluster_atual
+            ) / len(clusters_escolhidos)
+            # se já tem muitos no mesmo cluster, desincentiva um pouco
+            penalidade_cluster = 0.5 * proporcao_mesmo
+
     # Score final
-    # -------------------------
-    score_final = (
-        cobertura_score      # cobertura
-        + hf_score           # quentes/frias
-        + cluster_score      # estilo médio
-        - penal_ultimos      # muito colado nos últimos sorteios
-        - penal_diversidade  # muito parecido com outros jogos do próprio wizard
+    score = (
+        brain_cfg.peso_cobertura * cobertura_score
+        + bonus_quentes
+        + bonus_frias
+        + bonus_20_25
+        - penalidade_ultimos
+        - penalidade_diversidade_total
+        - penalidade_cluster
     )
 
-    return float(score_final)
+    return float(score)
