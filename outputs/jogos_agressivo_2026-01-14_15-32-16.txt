@@ -1,0 +1,27 @@
+========================================
+     WIZARD LOTOFÁCIL - CLI
+========================================
+Base histórica: base/base_limpa.xlsx
+Combinações:    combinacoes/combinacoes.csv
+Modo:           agressivo
+Últimos:        20 concursos
+Jogos finais:   5
+========================================
+
+🔍 Lendo combinações de: combinacoes/combinacoes.csv
+Modo: agressivo | Jogos finais desejados: 5
+✅ Quantidade de jogos finais atingida.
+
+========================================
+        JOGOS GERADOS PELO WIZARD       
+========================================
+Modo: agressivo
+Jogos finais: 5
+
+Jogo 01: 01 04 06 09 11 12 13 15 16 17 20 21 22 24 25
+Jogo 02: 01 02 04 06 07 09 13 14 15 17 18 19 20 24 25
+Jogo 03: 02 04 06 07 10 12 13 15 16 17 20 21 23 24 25
+Jogo 04: 01 03 04 05 07 09 11 13 14 15 16 18 20 21 22
+Jogo 05: 02 03 04 07 11 12 13 15 16 17 19 22 23 24 25
+
+Boa sorte! 🍀
