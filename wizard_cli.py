@@ -7,6 +7,11 @@ from typing import List, Tuple, Set, Dict
 
 import pandas as pd
 
+from wizard_brain import (
+    detectar_quentes_frias,
+    clusterizar_concursos,
+    calcular_score_inteligente,
+)
 
 # =========================================
 #   CONFIGURAÇÃO DO WIZARD
@@ -18,7 +23,8 @@ class WizardConfig:
     ultimos: int            # quantos concursos recentes comparar
     jogos_finais: int       # quantos jogos o wizard deve entregar
     max_seq_run: int = 4    # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
-    min_score: float = 0.0  # score mínimo para aceitar um jogo
+    # min_score base (ajustado mais abaixo por modo)
+    min_score_base: float = 6.0
 
 
 # =========================================
@@ -40,12 +46,17 @@ def carregar_base(base_path: Path) -> pd.DataFrame:
 
 
 def pegar_ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    # Ordena por Concurso se existir, senão usa ordem natural
     if "Concurso" in df.columns:
         df = df.sort_values("Concurso")
     return df.tail(n).reset_index(drop=True)
 
 
 def respeita_sequencia_maxima(dezenas: List[int], max_seq_run: int) -> bool:
+    """
+    Verifica se não há mais do que `max_seq_run` dezenas consecutivas.
+    Ex.: [1,2,3,4,7,...] com max_seq_run=4 OK; se tivesse 1..5 -> quebra.
+    """
     dezenas = sorted(dezenas)
     run = 1
     for i in range(1, len(dezenas)):
@@ -58,65 +69,51 @@ def respeita_sequencia_maxima(dezenas: List[int], max_seq_run: int) -> bool:
     return True
 
 
-def muito_parecido(jogo: Tuple[int, ...],
-                   escolhidos: List[Tuple[int, ...]],
-                   limite_inter: int = 14) -> bool:
+def jogo_muito_parecido(
+    dezenas: List[int],
+    escolhidos: List[Tuple[int, ...]],
+    max_intersec: int = 10,
+) -> bool:
     """
-    Evita jogos quase idênticos aos já escolhidos.
-    Se a interseção com algum escolhido for >= limite_inter, descarta.
+    Evita jogos quase idênticos entre si.
+    Se compartilhar >= max_intersec dezenas com algum já escolhido, rejeita.
     """
-    s = set(jogo)
+    set_jogo = set(dezenas)
     for j in escolhidos:
-        if len(s.intersection(j)) >= limite_inter:
+        if len(set_jogo.intersection(j)) >= max_intersec:
             return True
     return False
 
 
-def calcular_score_jogo(
-    dezenas: List[int],
-    ultimos_tuplas: Set[Tuple[int, ...]],
-    cobertura_contagem: Dict[int, int],
-    modo: str,
-) -> float:
+def bonus_equilibrio(dezenas: List[int]) -> float:
     """
-    Score combinando:
-    - Cobertura (preferir dezenas pouco usadas nos jogos escolhidos)
-    - Penalizar semelhança com últimos concursos
-    - Bônus para ter dezenas altas (20–25) e não ficar só em dezenas muito baixas
+    Bônus por equilíbrio entre baixas, médias e altas,
+    e por diversidade geral.
+    Faixa sugerida para dezenas:
+      - Baixas:  1..7
+      - Médias:  8..18
+      - Altas:  19..25
     """
 
     dezenas_set = set(dezenas)
+    diversidade = len(dezenas_set) / 15.0  # normalmente 1.0, mas mantém a ideia
 
-    # 1) Cobertura
-    cobertura_score = 0.0
-    for d in dezenas:
-        freq = cobertura_contagem.get(d, 0)
-        cobertura_score += 1.0 / (1.0 + freq)
+    baixas = sum(1 for d in dezenas if 1 <= d <= 7)
+    medias = sum(1 for d in dezenas if 8 <= d <= 18)
+    altas  = sum(1 for d in dezenas if 19 <= d <= 25)
 
-    # 2) Semelhança com últimos concursos
-    max_overlap = 0
-    for ult in ultimos_tuplas:
-        inter = len(dezenas_set.intersection(ult))
-        if inter > max_overlap:
-            max_overlap = inter
+    # Normaliza por tamanho da faixa
+    bonus_baixas = baixas / 7.0
+    bonus_medias = medias / 11.0
+    bonus_altas  = altas / 7.0
 
-    if modo == "conservador":
-        penalidade = max(0, max_overlap - 9)
-    else:
-        penalidade = max(0, max_overlap - 11)
-
-    # 3) Bônus para dezenas altas (20–25) e evitar jogos só com números muito baixos
-    qtd_altos = sum(1 for d in dezenas if d >= 20)
-    bonus_altos = 0.15 * qtd_altos
-
-    max_dez = max(dezenas)
-    penalty_so_baixo = 0.0
-    if max_dez < 20:
-        # jogo só até 19: penaliza forte
-        penalty_so_baixo = 3.0
-
-    score = cobertura_score + bonus_altos - penalidade - penalty_so_baixo
-    return score
+    # Peso maior nas médias (onde historicamente sai mais)
+    return (
+        0.5 * diversidade +
+        0.7 * bonus_medias +
+        0.4 * bonus_baixas +
+        0.4 * bonus_altas
+    )
 
 
 # =========================================
@@ -127,34 +124,53 @@ def escolher_jogos(
     comb_path: Path,
     ultimos_df: pd.DataFrame,
     config: WizardConfig,
+    freq: Dict[int, int],
+    quentes: Set[int],
+    frias: Set[int],
+    modelo_cluster,
 ) -> List[Tuple[int, ...]]:
     """
-    Lê combinacoes/combinacoes_inteligentes.csv em chunks e escolhe jogos.
+    Lê combinacoes_inteligentes.csv em chunks e escolhe jogos
+    conforme o modo (agressivo/conservador), priorizando:
+
+    - evitar repetir demais os últimos concursos
+    - boa cobertura de dezenas
+    - equilíbrio entre baixas/médias/altas
+    - diversidade entre os próprios jogos escolhidos
     """
 
     modo = config.modo
     jogos_finais = config.jogos_finais
     max_seq_run = config.max_seq_run
-    min_score = config.min_score
+
+    # min_score mais exigente para modo conservador
+    min_score = (
+        config.min_score_base
+        if modo == "agressivo"
+        else config.min_score_base + 2.0
+    )
 
     print(f"🔍 Lendo combinações de: {comb_path}")
     print(f"Modo: {modo} | Jogos finais desejados: {jogos_finais}")
+    print(f"Score mínimo base: {min_score:.2f}")
 
     if not comb_path.exists():
         raise FileNotFoundError(f"Arquivo de combinações não encontrado: {comb_path}")
 
     escolhidos: List[Tuple[int, ...]] = []
 
-    # últimos concursos para evitar repetição exata
+    # Set com tuplas dos últimos concursos para evitar repetição exata
     ultimos_tuplas: Set[Tuple[int, ...]] = set()
     for _, linha in ultimos_df.iterrows():
         dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
         ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
 
-    # cobertura
+    # Cobertura: contagem de frequência das dezenas nos escolhidos até agora
     cobertura_contagem: Dict[int, int] = {d: 0 for d in range(1, 26)}
 
-    chunk_size = 50_000
+    # Como o arquivo inteligente geralmente é pequeno (~20k),
+    # 20_000 por chunk é suficiente.
+    chunk_size = 20_000
     reader = pd.read_csv(comb_path, header=None, chunksize=chunk_size)
 
     for chunk_idx, chunk in enumerate(reader, start=1):
@@ -176,30 +192,36 @@ def escolher_jogos(
             dezenas = sorted(dezenas)
             jogo_tupla = tuple(dezenas)
 
-            # 1) não repetir exatamente últimos concursos
+            # 1) Não repetir exatamente jogos recentes
             if jogo_tupla in ultimos_tuplas:
                 continue
 
-            # 2) evitar muitos números consecutivos
+            # 2) Checar sequência máxima de números consecutivos
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) evitar ficar quase igual a jogos já escolhidos
-            if muito_parecido(jogo_tupla, escolhidos, limite_inter=14):
+            # 3) Evitar jogos muito parecidos entre si
+            if jogo_muito_parecido(dezenas, escolhidos, max_intersec=11):
                 continue
 
-            # 4) score
-            score = calcular_score_jogo(
-                dezenas,
-                ultimos_tuplas,
-                cobertura_contagem,
+            # 4) Score "inteligente" (wizard_brain) + bônus de equilíbrio
+            score_brain = calcular_score_inteligente(
+                dezenas=dezenas,
+                ultimos_tuplas=ultimos_tuplas,
+                cobertura_contagem=cobertura_contagem,
+                quentes=quentes,
+                frias=frias,
+                freq=freq,
+                modelo_cluster=modelo_cluster,
                 modo=modo,
             )
 
-            if score < min_score:
+            score_total = score_brain + bonus_equilibrio(dezenas)
+
+            if score_total < min_score:
                 continue
 
-            # 5) atualiza cobertura
+            # 5) Atualiza cobertura
             for d in dezenas:
                 cobertura_contagem[d] += 1
 
@@ -207,6 +229,7 @@ def escolher_jogos(
 
             if len(escolhidos) >= jogos_finais:
                 print("✅ Quantidade de jogos finais atingida.")
+                print(f"Score mínimo efetivo aceito neste chunk: {score_total:.2f}")
                 return escolhidos
 
     print("⚠️ Atenção: fim do arquivo de combinações, "
@@ -262,7 +285,7 @@ def main() -> None:
     args = parser.parse_args()
 
     base_path = Path("base/base_limpa.xlsx")
-    # *** NOVO: vamos usar o arquivo "inteligente" menor ***
+    # usamos sempre a versão inteligente de combinações
     comb_path = Path("combinacoes/combinacoes_inteligentes.csv")
 
     config = WizardConfig(
@@ -270,7 +293,7 @@ def main() -> None:
         ultimos=args.ultimos,
         jogos_finais=args.finais,
         max_seq_run=4,
-        min_score=0.0,
+        min_score_base=6.0,
     )
 
     print("========================================")
@@ -283,10 +306,26 @@ def main() -> None:
     print(f"Jogos finais:   {config.jogos_finais}")
     print("========================================\n")
 
+    # 1) Carrega base e pega últimos concursos
     base_df = carregar_base(base_path)
     ultimos_df = pegar_ultimos_concursos(base_df, config.ultimos)
 
-    jogos = escolher_jogos(comb_path, ultimos_df, config)
+    # 2) Estatísticas gerais para alimentar o cérebro
+    freq, quentes, frias = detectar_quentes_frias(base_df)
+    modelo_cluster = clusterizar_concursos(base_df)
+
+    # 3) Escolhe jogos
+    jogos = escolher_jogos(
+        comb_path=comb_path,
+        ultimos_df=ultimos_df,
+        config=config,
+        freq=freq,
+        quentes=quentes,
+        frias=frias,
+        modelo_cluster=modelo_cluster,
+    )
+
+    # 4) Imprime resumo
     imprimir_resumo(jogos, config)
 
 
