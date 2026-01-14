@@ -1,88 +1,60 @@
-import pandas as pd
 import requests
+import pandas as pd
 from pathlib import Path
+import time
 
 BASE_PATH = Path(__file__).resolve().parents[1] / "base"
 BASE_PATH.mkdir(exist_ok=True)
 ARQ_BASE = BASE_PATH / "base_limpa.xlsx"
 
-URL_CAIXA = "https://loteriascaixa-api.herokuapp.com/api/lotofacil"
+URL = "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/{}"
+HEADERS = {"Accept": "application/json"}
 
+def baixar_todos_concursos():
+    concursos = []
+    concurso_atual = 1
 
-def baixar_concursos():
-    """
-    Tenta baixar os concursos da API da Caixa.
+    # Primeiro obtenha o último concurso
+    r = requests.get(URL.format(""), headers=HEADERS)
+    ultimo = r.json()["numero"]
 
-    Em caso de erro de rede, timeout ou resposta estranha,
-    NÃO levanta exceção: apenas imprime um aviso e retorna None.
+    print(f"🔍 Último concurso encontrado: {ultimo}")
 
-    Isso é importante pro GitHub Actions não falhar o workflow inteiro.
-    """
-    try:
-        print(f"🔎 Acessando API da Caixa em: {URL_CAIXA}")
-        r = requests.get(URL_CAIXA, timeout=30)
-        r.raise_for_status()
+    for n in range(1, ultimo + 1):
+        try:
+            r = requests.get(URL.format(n), headers=HEADERS, timeout=10)
+            if r.status_code != 200:
+                print(f"⚠ Falha no concurso {n}, pulando...")
+                continue
 
-        dados = r.json()
+            dados = r.json()
+            dezenas = dados["listaDezenas"]
 
-        # A API normalmente retorna uma lista de concursos
-        if not isinstance(dados, list) or len(dados) == 0:
-            print("⚠️ Resposta inesperada da API da Caixa. Mantendo base atual.")
-            return None
+            registro = {
+                "Concurso": n,
+                **{f"D{i+1}": int(dezenas[i]) for i in range(15)},
+            }
 
-        print(f"✅ API respondeu com {len(dados)} concursos.")
-        return dados
+            concursos.append(registro)
 
-    except Exception as e:
-        print("⚠️ Erro ao acessar API da Caixa.")
-        print(f"   Detalhes: {e}")
-        print("   A base NÃO será atualizada nesta execução.")
-        return None
+            # Evitar bloqueio por excesso de chamadas
+            time.sleep(0.2)
 
+        except Exception as e:
+            print(f"⚠ Erro ao obter concurso {n}: {e}")
+
+    return concursos
 
 def atualizar_base():
-    dados = baixar_concursos()
+    registros = baixar_todos_concursos()
 
-    # Se não conseguiu baixar, não quebra o job
-    if dados is None:
-        if ARQ_BASE.exists():
-            print("ℹ️ Usando arquivo de base já existente:")
-            print(f"   {ARQ_BASE}")
-        else:
-            print("❌ Nenhum arquivo base_limpa.xlsx existe ainda.")
-            print("   Rode o script localmente quando a API estiver ok para criar a base.")
-        return False
+    df = pd.DataFrame(registros)
+    df = df.sort_values("Concurso")
 
-    registros = []
-    for d in dados:
-        dezenas = sorted(d["dezenas"])
-        registro = {
-            "Concurso": d["concurso"],
-            **{f"D{i+1}": dezenas[i] for i in range(15)},
-        }
-        registros.append(registro)
-
-    df = pd.DataFrame(registros).sort_values("Concurso")
-
-    # Ciclo simples: reseta quando fecha 25 dezenas
-    ciclo = 1
-    usadas = set()
-    ciclos = []
-    for _, row in df.iterrows():
-        usadas |= set(row[f"D{i}"] for i in range(1, 16))
-        if len(usadas) == 25:
-            usadas.clear()
-            ciclo += 1
-        ciclos.append(ciclo)
-
-    df["Ciclo"] = ciclos
     df.to_excel(ARQ_BASE, index=False)
 
     print(f"✅ Base atualizada com {len(df)} concursos")
-    print(f"📁 Arquivo: {ARQ_BASE}")
-
-    return True
-
+    print(f"📁 Arquivo salvo: {ARQ_BASE}")
 
 if __name__ == "__main__":
     atualizar_base()
