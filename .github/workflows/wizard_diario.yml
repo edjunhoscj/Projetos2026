@@ -71,19 +71,12 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Adiciona apenas o que o workflow altera
-          git add outputs/ base/base_limpa.xlsx || true
+          git add outputs/ base/base_limpa.xlsx combinacoes/combinacoes_inteligentes.csv || true
 
-          # Se não tiver nada para commitar, sai tranquilo
           if git diff --cached --quiet; then
             echo "Nenhuma alteração para commitar."
             exit 0
           fi
 
           git commit -m "Atualização diária Wizard Lotofacil"
-
-          # 🔁 Garante que está sincronizado com o remoto
-          git pull --rebase origin main || true
-
-          # Push do commit (já rebaseado) para o main
-          git push origin HEAD:main
+          git push origin main
