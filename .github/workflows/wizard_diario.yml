@@ -1,82 +1,21 @@
-name: Wizard Lotofacil Diário
-
-on:
-  schedule:
-    # 17:00 em Brasília (UTC-3) => 20:00 UTC, de segunda a sexta
-    - cron: "0 20 * * 1-5"
-  workflow_dispatch:
-    inputs:
-      ultimos:
-        description: "Quantidade de últimos concursos"
-        required: false
-        default: "20"
-      finais:
-        description: "Quantidade de jogos finais"
-        required: false
-        default: "5"
-
-permissions:
-  contents: write
-
-jobs:
-  rodar-wizard:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v3
-
-      - name: Instalar Python 3.12
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.12"
-
-      - name: Instalar dependências
-        run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
-
-      - name: Atualizar base da Caixa (RAW)
-        run: |
-          python scripts/atualizar_base.py
-
-      - name: Gerar base limpa
-        run: |
-          python scripts/gerar_base_limpa.py
-
-      - name: Gerar combinações
-        run: |
-          python scripts/gerar_combinacoes.py
-
-      - name: Rodar Wizard (agressivo e conservador)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
-        run: |
-          mkdir -p outputs
-          DATA=$(TZ="America/Sao_Paulo" date +"%Y-%m-%d_%H-%M-%S")
-
-          echo "Modo agressivo..."
-          python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            > "outputs/jogos_agressivo_${DATA}.txt"
-
-          echo "Modo conservador..."
-          python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            > "outputs/jogos_conservador_${DATA}.txt"
-
-      - name: Commit e push
+      - name: Commit e push dos resultados
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Adiciona apenas o que o workflow altera
           git add outputs/ base/base_limpa.xlsx || true
 
+          # Se não tiver nada para commitar, sai tranquilo
           if git diff --cached --quiet; then
             echo "Nenhuma alteração para commitar."
             exit 0
           fi
 
           git commit -m "Atualização diária Wizard Lotofacil"
-          git push origin main
+
+          # 🔁 Garante que está sincronizado com o remoto
+          git pull --rebase origin main || true
+
+          # Push do commit (já rebaseado) para o main
+          git push origin HEAD:main
