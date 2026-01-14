@@ -1,60 +1,131 @@
-import requests
-import pandas as pd
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
-import time
 
-BASE_PATH = Path(__file__).resolve().parents[1] / "base"
-BASE_PATH.mkdir(exist_ok=True)
-ARQ_BASE = BASE_PATH / "base_limpa.xlsx"
+import pandas as pd
+import requests
 
-URL = "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil/{}"
-HEADERS = {"Accept": "application/json"}
+# Pasta base/ e arquivo final
+BASE_DIR = Path(__file__).resolve().parents[1] / "base"
+BASE_DIR.mkdir(exist_ok=True)
 
-def baixar_todos_concursos():
-    concursos = []
-    concurso_atual = 1
+ARQ_BASE = BASE_DIR / "base_limpa.xlsx"
 
-    # Primeiro obtenha o último concurso
-    r = requests.get(URL.format(""), headers=HEADERS)
-    ultimo = r.json()["numero"]
+# API agregada (já traz todos os concursos da Lotofácil)
+URL_CAIXA = "https://loteriascaixa-api.herokuapp.com/api/lotofacil"
 
-    print(f"🔍 Último concurso encontrado: {ultimo}")
 
-    for n in range(1, ultimo + 1):
-        try:
-            r = requests.get(URL.format(n), headers=HEADERS, timeout=10)
-            if r.status_code != 200:
-                print(f"⚠ Falha no concurso {n}, pulando...")
-                continue
+def baixar_todos_concursos() -> list[dict]:
+    """
+    Baixa TODOS os concursos da API agregada em UMA chamada.
+    Normalmente é bem rápido (alguns segundos).
+    """
+    print(f"📥 Baixando dados da API em {URL_CAIXA} ...")
+    resp = requests.get(URL_CAIXA, timeout=60)
+    resp.raise_for_status()
+    dados = resp.json()
+    print(f"✅ Recebidos {len(dados)} concursos da API.")
+    return dados
 
-            dados = r.json()
-            dezenas = dados["listaDezenas"]
 
-            registro = {
-                "Concurso": n,
-                **{f"D{i+1}": int(dezenas[i]) for i in range(15)},
-            }
+def montar_dataframe(dados: list[dict]) -> pd.DataFrame:
+    """
+    Monta um DataFrame com colunas:
+    Concurso, D1..D15, Ciclo (ciclo simples de 25 dezenas).
+    """
+    registros: list[dict] = []
 
-            concursos.append(registro)
+    for d in dados:
+        dezenas = sorted(d["dezenas"])
+        registro = {
+            "Concurso": d["concurso"],
+            **{f"D{i+1}": dezenas[i] for i in range(15)},
+        }
+        registros.append(registro)
 
-            # Evitar bloqueio por excesso de chamadas
-            time.sleep(0.2)
+    df = (
+        pd.DataFrame(registros)
+        .sort_values("Concurso")
+        .reset_index(drop=True)
+    )
 
-        except Exception as e:
-            print(f"⚠ Erro ao obter concurso {n}: {e}")
+    # Cálculo de ciclo simples: reseta quando cobrir as 25 dezenas
+    ciclo = 1
+    usadas: set[int] = set()
+    ciclos: list[int] = []
 
-    return concursos
+    cols_dezenas = [f"D{i}" for i in range(1, 16)]
+    for _, row in df[cols_dezenas].iterrows():
+        usadas |= {int(x) for x in row.values}
+        if len(usadas) == 25:
+            usadas.clear()
+            ciclo += 1
+        ciclos.append(ciclo)
 
-def atualizar_base():
-    registros = baixar_todos_concursos()
+    df["Ciclo"] = ciclos
+    return df
 
-    df = pd.DataFrame(registros)
-    df = df.sort_values("Concurso")
+
+def atualizar_base(ultimos: int | None = None) -> None:
+    """
+    Atualiza base_limpa.xlsx.
+
+    - Baixa todos os concursos da API agregada.
+    - Monta o DataFrame com colunas Concurso, D1..D15, Ciclo.
+    - Se `ultimos` for informado, mantém APENAS os últimos N concursos.
+    - Salva em base/base_limpa.xlsx.
+    """
+    print("========================================")
+    print("      ATUALIZAR_BASE.PY (AGREGADA)      ")
+    print("========================================")
+
+    dados = baixar_todos_concursos()
+    df = montar_dataframe(dados)
+
+    total = len(df)
+    print(f"📊 Total de concursos disponíveis: {total}")
+
+    if ultimos is not None and ultimos > 0 and ultimos < total:
+        df = df.tail(ultimos).reset_index(drop=True)
+        print(f"✂ Mantendo apenas os últimos {ultimos} concursos.")
+    else:
+        print("ℹ Mantendo TODOS os concursos recebidos.")
+
+    if ARQ_BASE.exists():
+        df_antigo = pd.read_excel(ARQ_BASE)
+        ultimo_antigo = int(df_antigo["Concurso"].max())
+        print(f"📁 Base antiga ia até o concurso: {ultimo_antigo}")
+
+    ultimo_novo = int(df["Concurso"].max())
+    primeiro_novo = int(df["Concurso"].min())
+    print(f"📁 Nova base: de {primeiro_novo} até {ultimo_novo}")
 
     df.to_excel(ARQ_BASE, index=False)
 
-    print(f"✅ Base atualizada com {len(df)} concursos")
-    print(f"📁 Arquivo salvo: {ARQ_BASE}")
+    print("========================================")
+    print(f"💾 Base atualizada salva em: {ARQ_BASE}")
+    print(f"   Total de linhas na base: {len(df)}")
+    print("========================================")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Atualiza a base da Lotofácil a partir da API agregada.\n"
+            "Use --ultimos N para manter apenas os últimos N concursos."
+        )
+    )
+    parser.add_argument(
+        "--ultimos",
+        type=int,
+        default=None,
+        help="Se informado, mantém apenas os últimos N concursos na base.",
+    )
+    args = parser.parse_args()
+
+    atualizar_base(args.ultimos)
+
 
 if __name__ == "__main__":
-    atualizar_base()
+    main()
