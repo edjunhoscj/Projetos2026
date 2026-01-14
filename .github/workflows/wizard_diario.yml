@@ -68,15 +68,19 @@ jobs:
 
       - name: Commit e push dos resultados
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+      git config --global user.name "github-actions[bot]"
+      git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add outputs/ base/base_limpa.xlsx combinacoes/combinacoes_inteligentes.csv || true
+      # força incluir arquivos da pasta combinacoes/
+      git add -f combinacoes/
 
-          if git diff --cached --quiet; then
-            echo "Nenhuma alteração para commitar."
-            exit 0
-          fi
+      # adiciona o restante normalmente
+      git add .
 
-          git commit -m "Atualização diária Wizard Lotofacil"
-          git push origin main
+      # se houver mudanças, commita
+      if ! git diff --cached --quiet; then
+        git commit -m "Atualização diária Wizard Lotofacil"
+        git push
+      else
+        echo "Nenhuma mudança para enviar."
+      fi
