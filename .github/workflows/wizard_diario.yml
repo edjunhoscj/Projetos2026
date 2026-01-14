@@ -46,17 +46,18 @@ jobs:
         run: |
           python scripts/gerar_base_limpa.py
 
-      - name: Gerar combinações
+      - name: Gerar combinações inteligentes
         run: |
           python combinacoes/gerar_combinacoes.py
 
-      - name: Rodar Wizard (agressivo e conservador)
+      - name: Rodar Wizard (agressivo, conservador e backtest)
         env:
           ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           mkdir -p outputs
           DATA=$(TZ="America/Sao_Paulo" date +"%Y-%m-%d_%H-%M-%S")
+          echo "Timestamp usado: ${DATA}"
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
@@ -66,25 +67,33 @@ jobs:
           python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
             > "outputs/jogos_conservador_${DATA}.txt"
 
+          echo "Backtest agressivo..."
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_agressivo_${DATA}.txt" \
+            --ultimos 200 \
+            --csv-out "outputs/backtest_agressivo_${DATA}.csv"
+
+          echo "Backtest conservador..."
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_conservador_${DATA}.txt" \
+            --ultimos 200 \
+            --csv-out "outputs/backtest_conservador_${DATA}.csv"
+
       - name: Commit e push dos resultados
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # força incluir arquivos da pasta combinacoes/ (mesmo se estiver no .gitignore)
-          git add -f combinacoes/ || true
+          # força incluir combinacoes e outputs
+          git add -f combinacoes/ outputs/ base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
 
-          # adiciona outputs e base atualizada (se existirem)
-          git add outputs/ base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
+          # adiciona o restante normalmente
+          git add .
 
-          # pega qualquer outra mudança restante
-          git add . || true
-
-          # só commita se realmente houver algo staged
           if git diff --cached --quiet; then
-            echo "Nenhuma mudança para commitar."
+            echo "Nenhuma mudança para enviar."
             exit 0
           fi
 
-          git commit -m "Atualização diária Wizard Lotofacil"
-          git push origin main
+          git commit -m "Atualização diária Wizard Lotofacil (jogos + backtest)"
+          git push
