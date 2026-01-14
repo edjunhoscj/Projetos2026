@@ -2,7 +2,7 @@ name: Wizard Lotofacil Diário
 
 on:
   schedule:
-    # 20:00 UTC = 17:00 em Brasília (America/Sao_Paulo), de segunda a sexta
+    # 17:00 em Brasília (UTC-3) => 20:00 UTC, de segunda a sexta
     - cron: "0 20 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -38,7 +38,7 @@ jobs:
             pip install -r requirements.txt
           fi
 
-      - name: Atualizar base da Caixa
+      - name: Atualizar base da Caixa (RAW)
         run: |
           python scripts/atualizar_base.py
 
@@ -56,8 +56,7 @@ jobs:
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           mkdir -p outputs
-          # Timestamp em horário de Brasília
-          DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
+          DATA=$(TZ="America/Sao_Paulo" date +"%Y-%m-%d_%H-%M-%S")
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
@@ -67,12 +66,11 @@ jobs:
           python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
             > "outputs/jogos_conservador_${DATA}.txt"
 
-      - name: Commit e push dos resultados
+      - name: Commit e push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # combinacoes/combinacoes.csv deve estar no .gitignore
           git add outputs/ base/base_limpa.xlsx || true
 
           if git diff --cached --quiet; then
