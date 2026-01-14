@@ -148,7 +148,7 @@ def calcular_score_inteligente(
     cobertura_contagem: Dict[int, int],
     quentes: List[int],
     frias: List[int],
-    freq_global: Dict[int, int],
+    freq: Dict[int, int],   # <<< aqui, mudei o nome
     modelo_cluster,         # não usado por enquanto (placeholder)
     config,                 # WizardConfig (tem modo, etc.)
     escolhidos: List[tuple[int, ...]],
