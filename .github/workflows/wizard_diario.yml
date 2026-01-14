@@ -55,7 +55,6 @@ jobs:
           ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
-          set -e
           mkdir -p outputs
           DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
           echo "Timestamp usado: ${DATA}"
