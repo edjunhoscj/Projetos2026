@@ -3,18 +3,17 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import List, Tuple, Set, Dict
 
-import numpy as np
 import pandas as pd
 
-# Novo: importa o "cérebro"
 from wizard_brain import (
     detectar_quentes_frias,
     clusterizar_concursos,
     calcular_score_inteligente,
-    ClusterModel,
+    BrainConfig,
 )
+
 
 # =========================================
 #   CONFIGURAÇÃO DO WIZARD
@@ -27,13 +26,6 @@ class WizardConfig:
     jogos_finais: int       # quantos jogos o wizard deve entregar
     max_seq_run: int = 4    # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
     min_score: float = 0.0  # score mínimo para aceitar um jogo
-
-
-# Globais para o cérebro (preenchidos em main)
-QUENTES: Set[int] = set()
-FRIAS: Set[int] = set()
-FREQ: Dict[int, int] = {}
-CLUSTER_MODEL: ClusterModel | None = None
 
 
 # =========================================
@@ -87,6 +79,11 @@ def escolher_jogos(
     comb_path: Path,
     ultimos_df: pd.DataFrame,
     config: WizardConfig,
+    quentes: Set[int],
+    frias: Set[int],
+    freq: Dict[int, int],
+    clusters: Dict[Tuple[int, ...], int],
+    brain_cfg: BrainConfig,
 ) -> list[tuple[int, ...]]:
     """
     Lê combinacoes/combinacoes.csv em chunks e escolhe jogos
@@ -95,10 +92,11 @@ def escolher_jogos(
     - evitar repetir demais os últimos concursos
     - boa cobertura de dezenas
     - respeitar limite de sequência de números consecutivos
-    - usar quentes/frias, clusters e diversidade
+    - priorizar dezenas quentes
+    - dar espaço também para dezenas frias
+    - incentivar dezenas 20..25
+    - garantir diversidade entre os jogos finais
     """
-
-    global QUENTES, FRIAS, FREQ, CLUSTER_MODEL
 
     modo = config.modo
     jogos_finais = config.jogos_finais
@@ -156,16 +154,17 @@ def escolher_jogos(
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) Score inteligente (cobertura + quentes/frias + clusters + diversidade)
+            # 3) Score inteligente
             score = calcular_score_inteligente(
                 dezenas=dezenas,
                 ultimos_tuplas=ultimos_tuplas,
                 cobertura_contagem=cobertura_contagem,
-                quentes=QUENTES,
-                frias=FRIAS,
-                freq=FREQ,
-                modelo_cluster=CLUSTER_MODEL,
-                config=config,
+                quentes=quentes,
+                frias=frias,
+                freq=freq,
+                clusters=clusters,
+                config_wizard=config,
+                brain_cfg=brain_cfg,
                 escolhidos=escolhidos,
             )
 
@@ -211,8 +210,6 @@ def imprimir_resumo(jogos: list[tuple[int, ...]], config: WizardConfig) -> None:
 # =========================================
 
 def main() -> None:
-    global QUENTES, FRIAS, FREQ, CLUSTER_MODEL
-
     parser = argparse.ArgumentParser(
         description="Wizard Lotofácil - gera jogos filtrando combinações."
     )
@@ -248,6 +245,8 @@ def main() -> None:
         min_score=0.0,   # se quiser filtrar mais forte, aumentar esse valor
     )
 
+    brain_cfg = BrainConfig()  # usa os pesos padrão definidos no wizard_brain
+
     print("========================================")
     print("     WIZARD LOTOFÁCIL - CLI")
     print("========================================")
@@ -262,20 +261,28 @@ def main() -> None:
     base_df = carregar_base(base_path)
     ultimos_df = pegar_ultimos_concursos(base_df, config.ultimos)
 
-    # 2) Estatísticas inteligentes (quentes/frias + clusters)
-    QUENTES, FRIAS, FREQ = detectar_quentes_frias(
+    # 2) Calcula quentes / frias / frequências com base na janela de análise
+    quentes, frias, freq = detectar_quentes_frias(
         base_df,
-        n_ultimos=max(config.ultimos, 100),  # garante janela razoável
-    )
-    CLUSTER_MODEL = clusterizar_concursos(
-        base_df,
-        n_ultimos=max(config.ultimos, 100),
+        janela=max(config.ultimos, 200)  # garante janela razoável
     )
 
-    # 3) Escolhe jogos
-    jogos = escolher_jogos(comb_path, ultimos_df, config)
+    # 3) Cluster simples dos concursos históricos
+    clusters = clusterizar_concursos(base_df)
 
-    # 4) Imprime resumo
+    # 4) Escolhe jogos
+    jogos = escolher_jogos(
+        comb_path=comb_path,
+        ultimos_df=ultimos_df,
+        config=config,
+        quentes=quentes,
+        frias=frias,
+        freq=freq,
+        clusters=clusters,
+        brain_cfg=brain_cfg,
+    )
+
+    # 5) Imprime resumo
     imprimir_resumo(jogos, config)
 
 
