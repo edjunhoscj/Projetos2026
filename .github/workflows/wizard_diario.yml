@@ -119,15 +119,11 @@ jobs:
           git commit -m "Atualização diária Wizard Lotofacil (jogos + backtest)"
           git push
 
-      - name: Limpar outputs antigos
-        run: |
-          rm -rf outputs
-          mkdir -p outputs
-
-jobs:
-  rodar-wizard:
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Checkout do repositório
         uses: actions/checkout@v3
+
+      - name: Limpar outputs antigos
+       run: |
+         rm -rf outputs
+         mkdir -p outputs
+       
