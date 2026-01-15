@@ -5,3 +5,4 @@ scikit_learn
 openpyxl>=3.1.0
 numpy
 tensorflow
+matplotlib
