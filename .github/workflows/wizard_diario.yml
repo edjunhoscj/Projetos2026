@@ -79,6 +79,23 @@ jobs:
             --ultimos 200 \
             --csv-out "outputs/backtest_conservador_${DATA}.csv"
 
+      - name: Gerar TXT formatado do backtest
+        run: |
+          DATA=$(ls outputs/backtest_agressivo_* | sed 's/.*backtest_agressivo_//' | sed 's/\.csv//' | tail -n 1)
+
+          echo "Usando timestamp: ${DATA}"
+
+          python scripts/formatar_backtest.py \
+            --csv "outputs/backtest_agressivo_${DATA}.csv" \
+            --modo "agressivo" \
+            --out "outputs/backtest_agressivo_${DATA}.txt"
+
+          python scripts/formatar_backtest.py \
+            --csv "outputs/backtest_conservador_${DATA}.csv" \
+            --modo "conservador" \
+            --out "outputs/backtest_conservador_${DATA}.txt"
+
+
       - name: Gerar dashboard (PNG + CSV)
         run: |
           python scripts/dashboard.py
