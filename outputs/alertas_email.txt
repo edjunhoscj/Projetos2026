@@ -3,9 +3,9 @@ ALERTAS WIZARD LOTOFÁCIL
 Jogos que já fizeram 13 pontos ou mais nos backtests recentes.
 
 ### Modo agressivo – jogos com max_acertos >= 13
-- 1.0 | max: 13.0 | média: 9.095 | min: 5.0
-- 4.0 | max: 13.0 | média: 9.055 | min: 6.0
+- 2.0 | max: 13.0 | média: 9.125 | min: 6.0
+- 3.0 | max: 13.0 | média: 9.025 | min: 6.0
 
 ### Modo conservador – jogos com max_acertos >= 13
-- 1.0 | max: 13.0 | média: 9.095 | min: 5.0
-- 4.0 | max: 13.0 | média: 9.055 | min: 6.0
+- 2.0 | max: 13.0 | média: 9.125 | min: 6.0
+- 3.0 | max: 13.0 | média: 9.025 | min: 6.0
