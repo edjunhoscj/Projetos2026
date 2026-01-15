@@ -6,23 +6,23 @@ Ordenado por: média de acertos, depois máximo e mínimo.
 
 Top 30 jogos:
 
-01. 5  | modo: agressivo | média: 9.025 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 17 | 12 pts: 5 | 13 pts: 1
-02. 5  | modo: conservador | média: 9.025 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 17 | 12 pts: 5 | 13 pts: 1
-03. 3  | modo: agressivo | média: 9.005 | max: 12 | min: 5 | último backtest: 14/01/2026 22:32
-    11 pts: 21 | 12 pts: 1 | 13 pts: 0
-04. 3  | modo: conservador | média: 9.005 | max: 12 | min: 5 | último backtest: 14/01/2026 22:32
-    11 pts: 21 | 12 pts: 1 | 13 pts: 0
-05. 2  | modo: agressivo | média: 8.990 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 24 | 12 pts: 2 | 13 pts: 1
-06. 2  | modo: conservador | média: 8.990 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 24 | 12 pts: 2 | 13 pts: 1
-07. 4  | modo: agressivo | média: 8.935 | max: 12 | min: 7 | último backtest: 14/01/2026 22:32
-    11 pts: 15 | 12 pts: 1 | 13 pts: 0
-08. 4  | modo: conservador | média: 8.935 | max: 12 | min: 7 | último backtest: 14/01/2026 22:32
-    11 pts: 15 | 12 pts: 1 | 13 pts: 0
-09. 1  | modo: agressivo | média: 8.930 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 15 | 12 pts: 2 | 13 pts: 1
-10. 1  | modo: conservador | média: 8.930 | max: 13 | min: 6 | último backtest: 14/01/2026 22:32
-    11 pts: 15 | 12 pts: 2 | 13 pts: 1
+01. 1  | modo: agressivo | média: 9.095 | max: 13 | min: 5 | último backtest: 15/01/2026 02:05
+    11 pts: 20 | 12 pts: 1 | 13 pts: 1
+02. 1  | modo: conservador | média: 9.095 | max: 13 | min: 5 | último backtest: 15/01/2026 02:05
+    11 pts: 20 | 12 pts: 1 | 13 pts: 1
+03. 4  | modo: agressivo | média: 9.055 | max: 13 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 23 | 12 pts: 4 | 13 pts: 2
+04. 4  | modo: conservador | média: 9.055 | max: 13 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 23 | 12 pts: 4 | 13 pts: 2
+05. 2  | modo: agressivo | média: 9.045 | max: 12 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 20 | 12 pts: 5 | 13 pts: 0
+06. 2  | modo: conservador | média: 9.045 | max: 12 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 20 | 12 pts: 5 | 13 pts: 0
+07. 3  | modo: agressivo | média: 8.995 | max: 12 | min: 5 | último backtest: 15/01/2026 02:05
+    11 pts: 13 | 12 pts: 4 | 13 pts: 0
+08. 3  | modo: conservador | média: 8.995 | max: 12 | min: 5 | último backtest: 15/01/2026 02:05
+    11 pts: 13 | 12 pts: 4 | 13 pts: 0
+09. 5  | modo: agressivo | média: 8.925 | max: 12 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 16 | 12 pts: 3 | 13 pts: 0
+10. 5  | modo: conservador | média: 8.925 | max: 12 | min: 6 | último backtest: 15/01/2026 02:05
+    11 pts: 16 | 12 pts: 3 | 13 pts: 0
