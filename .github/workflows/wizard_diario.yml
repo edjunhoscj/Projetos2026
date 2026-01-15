@@ -100,6 +100,11 @@ jobs:
         run: |
           python scripts/dashboard.py
 
+      - name: Gerar site estático (GitHub Pages)
+        run: |
+          mkdir -p docs
+          python scripts/gerar_site.py
+
       - name: Commit e push dos resultados
         run: |
           git config --global user.name "github-actions[bot]"
@@ -127,3 +132,4 @@ jobs:
           rm -rf outputs
           mkdir -p outputs
        
+      
