@@ -131,6 +131,11 @@ jobs:
           git commit -m "Atualização diária Wizard Lotofacil (jogos + backtest)"
           git push
 
+
+      - name: Gerar relatório completo
+        run: |
+          python scripts/gerar_relatorio_completo.py
+
       - name: Checkout do repositório
         uses: actions/checkout@v3
 
