@@ -95,11 +95,13 @@ jobs:
             --modo "conservador" \
             --out "outputs/backtest_conservador_${DATA}.txt"
 
+      - name: Gerar alerta (jogos com 13+ pontos)
+        run: |
+          python scripts/alertas.py
+
       - name: Gerar ranking acumulado
         run: |
           python scripts/ranking_acumulado.py
-
-
 
       - name: Gerar dashboard (PNG + CSV)
         run: |
