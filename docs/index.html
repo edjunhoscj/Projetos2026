@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Wizard Lotofácil – Dashboard Diário</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 10px 40px;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1, h2, h3 {
+      text-align: center;
+    }
+    h1 {
+      margin-bottom: 0;
+    }
+    h2 {
+      margin-top: 40px;
+    }
+    .subtitulo {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #9ca3af;
+      font-size: 0.95rem;
+    }
+    .tabela {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 24px;
+      background: #020617;
+    }
+    .tabela th, .tabela td {
+      border: 1px solid #1f2937;
+      padding: 6px 8px;
+      font-size: 0.78rem;
+      text-align: center;
+    }
+    .tabela th {
+      background: #111827;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      margin-top: 10px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: #020617;
+      border-radius: 10px;
+      padding: 14px 16px 18px;
+      border: 1px solid #1e293b;
+      box-shadow: 0 14px 30px rgba(15,23,42,0.8);
+    }
+    img {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid #1f2937;
+    }
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+    .pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      border: 1px solid #374151;
+      margin: 0 4px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Wizard Lotofácil – Painel Diário</h1>
+  <p class="subtitulo">
+    Jogos gerados automaticamente (modo <strong>agressivo</strong> e <strong>conservador</strong>) + backtests e estatísticas.<br>
+    Atualizado em: <strong>15/01/2026 01:32</strong>
+  </p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Gráfico – Desempenho & Média Móvel</h2>
+      <p class="pill">Histórico dos backtests</p>
+      <img src="dashboard_desempenho_e_mm.png" alt="Desempenho e média móvel">
+    </div>
+    <div class="card">
+      <h2>Gráfico – Distribuição de Acertos</h2>
+      <p class="pill">Frequência de 11, 12, 13, 14, 15 pts</p>
+      <img src="dashboard_distribuicao_acertos.png" alt="Distribuição de acertos">
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Resumo Geral dos Jogos (Agressivo + Conservador)</h3>
+<table class="dataframe tabela">
+  <thead>
+    <tr style="text-align: center;">
+      <th>modo</th>
+      <th>jogos_avaliados</th>
+      <th>media_acertos</th>
+      <th>mediana_acertos</th>
+      <th>max_acertos</th>
+      <th>min_acertos</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>agressivo</td>
+      <td>5</td>
+      <td>12.6</td>
+      <td>13.0</td>
+      <td>13</td>
+      <td>12</td>
+    </tr>
+    <tr>
+      <td>conservador</td>
+      <td>5</td>
+      <td>12.6</td>
+      <td>13.0</td>
+      <td>13</td>
+      <td>12</td>
+    </tr>
+  </tbody>
+</table>
+  </div>
+
+  <div class="card">
+    <h3>Backtest – Modo Agressivo (Top 10)</h3>
+<table class="dataframe tabela">
+  <thead>
+    <tr style="text-align: center;">
+      <th>Jogo</th>
+      <th>media_acertos</th>
+      <th>max_acertos</th>
+      <th>min_acertos</th>
+      <th>11.0</th>
+      <th>12.0</th>
+      <th>13.0</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>5</td>
+      <td>9.025</td>
+      <td>13</td>
+      <td>6</td>
+      <td>17</td>
+      <td>5</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>9.005</td>
+      <td>12</td>
+      <td>5</td>
+      <td>21</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>8.990</td>
+      <td>13</td>
+      <td>6</td>
+      <td>24</td>
+      <td>2</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>8.935</td>
+      <td>12</td>
+      <td>7</td>
+      <td>15</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>8.930</td>
+      <td>13</td>
+      <td>6</td>
+      <td>15</td>
+      <td>2</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table>
+  </div>
+
+  <div class="card">
+    <h3>Backtest – Modo Conservador (Top 10)</h3>
+<table class="dataframe tabela">
+  <thead>
+    <tr style="text-align: center;">
+      <th>Jogo</th>
+      <th>media_acertos</th>
+      <th>max_acertos</th>
+      <th>min_acertos</th>
+      <th>11.0</th>
+      <th>12.0</th>
+      <th>13.0</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>5</td>
+      <td>9.025</td>
+      <td>13</td>
+      <td>6</td>
+      <td>17</td>
+      <td>5</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>9.005</td>
+      <td>12</td>
+      <td>5</td>
+      <td>21</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>8.990</td>
+      <td>13</td>
+      <td>6</td>
+      <td>24</td>
+      <td>2</td>
+      <td>1</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>8.935</td>
+      <td>12</td>
+      <td>7</td>
+      <td>15</td>
+      <td>1</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>1</td>
+      <td>8.930</td>
+      <td>13</td>
+      <td>6</td>
+      <td>15</td>
+      <td>2</td>
+      <td>1</td>
+    </tr>
+  </tbody>
+</table>
+  </div>
+
+  <div class="card">
+    <h3>Distribuição de Acertos por Jogo</h3>
+<table class="dataframe tabela">
+  <thead>
+    <tr style="text-align: center;">
+      <th>modo</th>
+      <th>max_acertos</th>
+      <th>qtd</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>agressivo</td>
+      <td>12</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>conservador</td>
+      <td>12</td>
+      <td>2</td>
+    </tr>
+    <tr>
+      <td>agressivo</td>
+      <td>13</td>
+      <td>3</td>
+    </tr>
+    <tr>
+      <td>conservador</td>
+      <td>13</td>
+      <td>3</td>
+    </tr>
+  </tbody>
+</table>
+  </div>
+
+  <footer>
+    Wizard Lotofácil – gerado automaticamente pelo GitHub Actions.
+  </footer>
+</body>
+</html>
