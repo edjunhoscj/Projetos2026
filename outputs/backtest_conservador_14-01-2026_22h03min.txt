@@ -1,0 +1,18 @@
+========================================
+ BACKTEST - MODO CONSERVADOR
+========================================
+
+Resumo por jogo (ordenado pela melhor média de acertos):
+
+ jogo media_acertos max_acertos min_acertos 11.0 12.0 13.0
+    2        9.0350          12           6   18    3    0
+    1        9.0300          13           6   15    5    1
+    4        8.9950          13           6   20    5    1
+    5        8.9250          12           5    8    2    0
+    3        8.9200          13           5   14    2    2
+
+Legenda:
+  - media_acertos : média de acertos do jogo nos concursos analisados
+  - max_acertos   : maior número de acertos que o jogo já fez
+  - min_acertos   : menor número de acertos que o jogo já fez
+  - colunas 11.0, 12.0, 13.0 etc: quantas vezes o jogo fez 11, 12, 13 pontos...
