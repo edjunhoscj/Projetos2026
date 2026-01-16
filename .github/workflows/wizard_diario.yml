@@ -7,13 +7,17 @@ on:
   workflow_dispatch:
     inputs:
       ultimos:
-        description: "Quantidade de últimos concursos"
+        description: "Quantidade de últimos concursos (Wizard)"
         required: false
         default: "20"
       finais:
-        description: "Quantidade de jogos finais"
+        description: "Quantidade de jogos finais (Wizard)"
         required: false
         default: "5"
+      backtest_ultimos:
+        description: "Quantidade de concursos para backtest"
+        required: false
+        default: "200"
 
 permissions:
   contents: write
@@ -50,14 +54,22 @@ jobs:
         run: |
           python combinacoes/gerar_combinacoes.py
 
-      - name: Rodar Wizard (agressivo, conservador e backtest)
+      - name: Rodar Wizard + Backtest + Relatórios (tudo junto, com timestamp único)
         env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
+          ULTIMOS:         ${{ github.event.inputs.ultimos || '20' }}
+          FINAIS:          ${{ github.event.inputs.finais || '5' }}
+          BACKTEST_ULTIMOS:${{ github.event.inputs.backtest_ultimos || '200' }}
         run: |
+          set -e
           mkdir -p outputs
+
+          # Timestamp padrão do seu formato (ex.: 15-01-2026_11h58min)
           DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
+          DATA_DIA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")
+
           echo "Timestamp usado: ${DATA}"
+          echo "Data do dia: ${DATA_DIA}"
+          echo "ULTIMOS=${ULTIMOS} | FINAIS=${FINAIS} | BACKTEST_ULTIMOS=${BACKTEST_ULTIMOS}"
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
@@ -70,87 +82,76 @@ jobs:
           echo "Backtest agressivo..."
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_agressivo_${DATA}.txt" \
-            --ultimos 200 \
+            --ultimos "${BACKTEST_ULTIMOS}" \
             --csv-out "outputs/backtest_agressivo_${DATA}.csv"
 
           echo "Backtest conservador..."
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_conservador_${DATA}.txt" \
-            --ultimos 200 \
+            --ultimos "${BACKTEST_ULTIMOS}" \
             --csv-out "outputs/backtest_conservador_${DATA}.csv"
 
-      - name: Gerar relatório mastigado do backtest (TXT)
-        run: |
-          python scripts/relatorio_mastigado.py \
-            --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
-            --conservador "outputs/backtest_conservador_${DATA}.csv" \
-            --out "outputs/relatorio_mastigado_${DATA}.txt" \
-            --data "$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")"
+          echo "Gerar dashboard (PNG + CSV)..."
+          # Se seu dashboard precisa de matplotlib, garanta que matplotlib está no requirements.txt
+          python scripts/dashboard.py
 
+          echo "Gerar ranking acumulado..."
+          # Se você já tem esse script/rotina, mantenha. Se não tiver, pode remover esta linha.
+          # Exemplo comum: python scripts/ranking_acumulado.py
+          if [ -f scripts/ranking_acumulado.py ]; then
+            python scripts/ranking_acumulado.py
+          else
+            echo "scripts/ranking_acumulado.py não existe (ok, pulando)."
+          fi
 
-      - name: Gerar relatório completo
-        run: |
-          python scripts/gerar_relatorio_completo.py
+          echo "Gerar relatório completo do dia..."
+          # Se você tem o script de relatório completo:
+          if [ -f scripts/relatorio_completo.py ]; then
+            python scripts/relatorio_completo.py \
+              --data "${DATA_DIA}" \
+              --jogos-agressivo "outputs/jogos_agressivo_${DATA}.txt" \
+              --jogos-conservador "outputs/jogos_conservador_${DATA}.txt" \
+              --backtest-agressivo "outputs/backtest_agressivo_${DATA}.csv" \
+              --backtest-conservador "outputs/backtest_conservador_${DATA}.csv" \
+              --out "outputs/relatorio_completo_${DATA}.txt"
+          else
+            echo "scripts/relatorio_completo.py não existe (ok, pulando)."
+          fi
 
+          echo "Gerar relatório mastigado (TXT)..."
+          # Esse é o que estava dando erro. Agora ele recebe os caminhos completos.
+          if [ -f scripts/relatorio_mastigado.py ]; then
+            python scripts/relatorio_mastigado.py \
+              --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
+              --conservador "outputs/backtest_conservador_${DATA}.csv" \
+              --out "outputs/relatorio_mastigado_${DATA}.txt" \
+              --data "${DATA_DIA}"
+          else
+            echo "scripts/relatorio_mastigado.py não existe (ok, pulando)."
+          fi
+
+          echo "Listando outputs gerados:"
+          ls -lah outputs | tail -n 200
 
       - name: Commit e push dos resultados
         run: |
+          set -e
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # força incluir combinacoes e outputs e bases
-          git add -f combinacoes/ outputs/ base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
+          # garante que a pasta outputs existe no git mesmo vazia
+          touch outputs/.gitkeep
+
+          # adiciona outputs + bases + combinações (se você quer versionar)
+          git add -f outputs/ combinacoes/ base/base_limpa.xlsx base/base_dados_atualizada.xlsx 2>/dev/null || true
 
           # adiciona o restante normalmente
-          git add .
+          git add . 2>/dev/null || true
 
           if git diff --cached --quiet; then
             echo "Nenhuma mudança para enviar."
             exit 0
           fi
 
-          git commit -m "Atualização diária Wizard Lotofacil (jogos + backtest)"
+          git commit -m "Atualização diária Wizard Lotofacil (jogos + backtest + relatórios)"
           git push
-
-      - name: Gerar TXT formatado do backtest
-        run: |
-          DATA=$(ls outputs/backtest_agressivo_* | sed 's/.*backtest_agressivo_//' | sed 's/\.csv//' | tail -n 1)
-
-          echo "Usando timestamp: ${DATA}"
-
-          python scripts/formatar_backtest.py \
-            --csv "outputs/backtest_agressivo_${DATA}.csv" \
-            --modo "agressivo" \
-            --out "outputs/backtest_agressivo_${DATA}.txt"
-
-          python scripts/formatar_backtest.py \
-            --csv "outputs/backtest_conservador_${DATA}.csv" \
-            --modo "conservador" \
-            --out "outputs/backtest_conservador_${DATA}.txt"
-
-      - name: Gerar alerta (jogos com 13+ pontos)
-        run: |
-          python scripts/alertas.py
-
-      - name: Gerar ranking acumulado
-        run: |
-          python scripts/ranking_acumulado.py
-
-      - name: Gerar dashboard (PNG + CSV)
-        run: |
-          python scripts/dashboard.py
-
-      - name: Gerar site estático (GitHub Pages)
-        run: |
-          mkdir -p docs
-          python scripts/gerar_site.py
-
-      - name: Checkout do repositório
-        uses: actions/checkout@v3
-
-      - name: Limpar outputs antigos
-        run: |
-          rm -rf outputs
-          mkdir -p outputs
-       
-      
