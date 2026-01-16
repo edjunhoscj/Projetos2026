@@ -96,6 +96,11 @@ jobs:
             --ultimos "${ULTIMOS_BACKTEST}" \
             --csv-out "outputs/backtest_conservador_${DATA}.csv"
 
+      - name: Checar scripts
+        run: |
+          ls -la scripts/
+
+
       - name: Gerar dashboard (PNG + CSV)
         run: |
           python scripts/dashboard.py
