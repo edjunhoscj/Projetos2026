@@ -107,7 +107,7 @@ jobs:
 
       - name: Gerar relatorio completo (TXT)
         run: |
-          python scripts/relatorio_completo.py
+          python scripts/gerar_relatorio_completo.py
 
       - name: Gerar relatorio mastigado (TXT)
         run: |
