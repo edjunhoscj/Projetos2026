@@ -111,14 +111,13 @@ jobs:
 
       - name: Gerar relatorio mastigado (TXT)
         run: |
-    DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
+          DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
 
-    python scripts/relatorio_mastigado.py \
-      --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
-      --conservador "outputs/backtest_conservador_${DATA}.csv" \
-      --out "outputs/relatorio_mastigado_${DATA}.txt" \
-      --data "$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")"
-
+          python scripts/relatorio_mastigado.py \
+            --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
+            --conservador "outputs/backtest_conservador_${DATA}.csv" \
+            --out "outputs/relatorio_mastigado_${DATA}.txt" \
+            --data "$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")"
 
       - name: Commit e push dos resultados
         run: |
