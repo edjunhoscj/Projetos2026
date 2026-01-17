@@ -117,7 +117,7 @@ jobs:
             --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
             --conservador "outputs/backtest_conservador_${DATA}.csv" \
             --out "outputs/relatorio_mastigado_${DATA}.txt" \
-            --data "$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")"
+            --data "${DIA}"
 
       - name: Commit e push dos resultados
         run: |
