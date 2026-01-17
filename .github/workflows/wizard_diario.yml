@@ -95,7 +95,10 @@ jobs:
           grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_agressivo_${DATA}.txt" >/dev/null \
             || (echo "Nao achei 15 dezenas no txt agressivo" && echo "---- HEAD ----" && head -n 60 "outputs/jogos_agressivo_${DATA}.txt" && exit 1)
 
-
+          echo "Checando arquivo conservador..."
+          test -s "outputs/jogos_cinservador_${DATA}.txt" || (echo "Arquivo vazio!" && exit 1)
+          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_conservador_${DATA}.txt" >/dev/null \
+             || (echo "Nao achei 15 dezenas no txt conservador" && echo "---- HEAD ----" && head -n 60 "outputs/jogos_conservador_${DATA}.txt" && exit 1)
 
       - name: Commit e push dos resultados
         run: |
