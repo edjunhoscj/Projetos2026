@@ -67,10 +67,18 @@ jobs:
             > "outputs/jogos_conservador_${DATA}.txt"
 
           echo "Backtest agressivo..."
+          echo "Arquivo: outputs/jogos_agressivo_${DATA}.txt"
+          ls -la "outputs/jogos_agressivo_${DATA}.txt" || true
+          echo "HEAD do arquivo:"
+          head -n 80 "outputs/jogos_agressivo_${DATA}.txt" || true
+
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_agressivo_${DATA}.txt" \
             --ultimos 200 \
             --csv-out "outputs/backtest_agressivo_${DATA}.csv"
+
+
+
 
           echo "Backtest conservador..."
           python scripts/backtest.py \
