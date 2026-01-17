@@ -1,125 +1,74 @@
 from __future__ import annotations
-import pandas as pd
-from datetime import datetime
+
+import argparse
 from pathlib import Path
 
-OUTPUT = Path("outputs")
 
-def carregar_csv_recente(prefixo: str) -> pd.DataFrame:
-    arquivos = sorted(OUTPUT.glob(f"{prefixo}*.csv"))
-    if not arquivos:
-        return None
-    return pd.read_csv(arquivos[-1])
+def read_text_safe(path: Path) -> str:
+    if not path.exists():
+        return f"[AVISO] Arquivo não encontrado: {path}\n"
+    return path.read_text(encoding="utf-8", errors="replace")
 
-def carregar_txt_recente(prefixo: str) -> list[str]:
-    arquivos = sorted(OUTPUT.glob(f"{prefixo}*.txt"))
-    if not arquivos:
-        return []
-    return Path(arquivos[-1]).read_text().splitlines()
 
-def gerar_relatorio():
-    agora = datetime.now().strftime("%d-%m-%Y")
-    arquivo_saida = OUTPUT / f"relatorio_completo_{agora}.txt"
+def main() -> None:
+    p = argparse.ArgumentParser(description="Gera um relatório completo (TXT) juntando outputs do dia.")
+    p.add_argument("--data", required=True, help="Data no formato DD-MM-YYYY_HHhMMmin (mesmo timestamp do workflow)")
+    p.add_argument("--out", default="", help="Saída TXT. Se vazio, usa outputs/relatorio_completo_{data}.txt")
 
-    linhas = []
-    add = linhas.append
+    args = p.parse_args()
+    data = args.data.strip()
 
-    # =========================================
-    # CABEÇALHO
-    # =========================================
+    out = Path(args.out) if args.out.strip() else Path(f"outputs/relatorio_completo_{data}.txt")
+    out.parent.mkdir(parents=True, exist_ok=True)
 
-    add("==============================================")
-    add("        RELATÓRIO COMPLETO DO WIZARD")
-    add(f"        DATA: {agora}")
-    add("==============================================\n")
+    # Arquivos padrão do seu pipeline
+    jogos_ag = Path(f"outputs/jogos_agressivo_{data}.txt")
+    jogos_co = Path(f"outputs/jogos_conservador_{data}.txt")
+    bt_ag_csv = Path(f"outputs/backtest_agressivo_{data}.csv")
+    bt_co_csv = Path(f"outputs/backtest_conservador_{data}.csv")
+    bt_ag_txt = Path(f"outputs/backtest_agressivo_{data}.txt")  # se você estiver gerando
+    bt_co_txt = Path(f"outputs/backtest_conservador_{data}.txt")  # se você estiver gerando
+    dashboard_resumo = Path("outputs/dashboard_resumo_geral.csv")
+    dashboard_dist = Path("outputs/dashboard_distribuicao_acertos.csv")
+    ranking_txt = Path("outputs/ranking_acumulado.txt")
+    ranking_csv = Path("outputs/ranking_acumulado.csv")
 
-    # =========================================
-    # BACKTEST AGRESSIVO
-    # =========================================
+    parts = []
+    parts.append("==============================================")
+    parts.append("        RELATÓRIO COMPLETO DO WIZARD")
+    parts.append(f"        DATA: {data}")
+    parts.append("==============================================\n")
 
-    df_ag = carregar_csv_recente("backtest_agressivo")
-    if df_ag is not None:
-        add("------------ BACKTEST — MODO AGRESSIVO ------------")
-        add(df_ag.to_string(index=False))
-        add("\n")
+    parts.append("------------ BACKTEST — AGRESSIVO (CSV) ------------")
+    parts.append(read_text_safe(bt_ag_csv))
+    parts.append("\n------------ BACKTEST — CONSERVADOR (CSV) ------------")
+    parts.append(read_text_safe(bt_co_csv))
 
-    # =========================================
-    # BACKTEST CONSERVADOR
-    # =========================================
+    parts.append("\n------------ BACKTEST FORMATADO (TXT) ------------")
+    parts.append("AGRESSIVO:\n")
+    parts.append(read_text_safe(bt_ag_txt))
+    parts.append("\nCONSERVADOR:\n")
+    parts.append(read_text_safe(bt_co_txt))
 
-    df_cons = carregar_csv_recente("backtest_conservador")
-    if df_cons is not None:
-        add("------------ BACKTEST — MODO CONSERVADOR ------------")
-        add(df_cons.to_string(index=False))
-        add("\n")
+    parts.append("\n------------ DASHBOARD (RESUMO) ------------")
+    parts.append(read_text_safe(dashboard_resumo))
 
-    # =========================================
-    # MÉDIA DOS MODOS
-    # =========================================
+    parts.append("\n------------ DASHBOARD (DISTRIBUIÇÃO) ------------")
+    parts.append(read_text_safe(dashboard_dist))
 
-    df_media = carregar_csv_recente("media")
-    if df_media is not None:
-        add("------------ MÉDIA COMPARATIVA ------------")
-        add(df_media.to_string(index=False))
-        add("\n")
+    parts.append("\n------------ RANKING ACUMULADO ------------")
+    parts.append(read_text_safe(ranking_txt))
+    parts.append("\n(Ranking CSV)")
+    parts.append(read_text_safe(ranking_csv))
 
-    # =========================================
-    # DISTRIBUIÇÃO DE ACERTOS
-    # =========================================
+    parts.append("\n------------ JOGOS GERADOS — AGRESSIVO ------------")
+    parts.append(read_text_safe(jogos_ag))
+    parts.append("\n------------ JOGOS GERADOS — CONSERVADOR ------------")
+    parts.append(read_text_safe(jogos_co))
 
-    df_dist = carregar_csv_recente("dashboard_distribuicao_acertos")
-    if df_dist is not None:
-        add("------------ DISTRIBUIÇÃO DE ACERTOS ------------")
-        add(df_dist.to_string(index=False))
-        add("\n")
-
-    # =========================================
-    # JOGOS DO DIA (AGRESSIVO)
-    # =========================================
-
-    jogos_ag = carregar_txt_recente("jogos_agressivo")
-    if jogos_ag:
-        add("------------ JOGOS GERADOS — AGRESSIVO ------------")
-        linhas.extend(jogos_ag)
-        add("\n")
-
-    # =========================================
-    # JOGOS DO DIA (CONSERVADOR)
-    # =========================================
-
-    jogos_cons = carregar_txt_recente("jogos_conservador")
-    if jogos_cons:
-        add("------------ JOGOS GERADOS — CONSERVADOR ------------")
-        linhas.extend(jogos_cons)
-        add("\n")
-
-    # =========================================
-    # ANÁLISE INTERPRETADA
-    # =========================================
-
-    if df_ag is not None:
-        melhor = df_ag.sort_values("media_acertos", ascending=False).iloc[0]
-        add("============ INTERPRETAÇÃO DO MELHOR DO DIA ============")
-        add(f"Melhor jogo do modo agressivo: jogo {melhor['Jogo']}")
-        add(f"Média: {melhor['media_acertos']:.2f}")
-        add(f"Máximo atingido: {melhor['max_acertos']}")
-        add(f"Mínimo atingido: {melhor['min_acertos']}")
-        add("\n")
-
-    add("============ RECOMENDAÇÃO FINAL ============")
-    add("✔ Use o melhor jogo do agressivo para explosão")
-    add("✔ Combine com o mais estável do conservador")
-    add("✔ Para apostar só 1 jogo: use o melhor agressivo")
-    add("✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio")
-    add("\n")
-
-    # =========================================
-    # SALVAR ARQUIVO
-    # =========================================
-
-    arquivo_saida.write_text("\n".join(linhas), encoding="utf-8")
-    print(f"Relatório salvo em: {arquivo_saida}")
+    out.write_text("\n".join(parts), encoding="utf-8")
+    print(f"OK: gerado {out}")
 
 
 if __name__ == "__main__":
-    gerar_relatorio()
+    main()
