@@ -2,220 +2,174 @@ from __future__ import annotations
 
 import argparse
 import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Dict
 
 import pandas as pd
 
-BASE_LIMPA_PATH = Path("base/base_limpa.xlsx")
-
 
 # =========================
-# Carregar base limpa
+# Leitura / parsing jogos
 # =========================
-def carregar_base_limpa(path: Path = BASE_LIMPA_PATH) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Base limpa não encontrada em: {path}")
 
-    df = pd.read_excel(path)
-
-    esperadas = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
-    faltando = [c for c in esperadas if c not in df.columns]
-    if faltando:
-        raise ValueError(f"Colunas faltando na base limpa: {faltando}")
-
-    df = df.sort_values("Concurso").reset_index(drop=True)
-    return df
-
-
-# =========================
-# Ler jogos do TXT
-# =========================
-def parse_jogos_arquivo(path: Path) -> List[Tuple[int, ...]]:
+def parse_jogos_arquivo(path: Path) -> List[List[int]]:
     """
-    Lê um arquivo TXT gerado pelo wizard (outputs/...) e extrai os jogos.
-
-    Exemplo de linha:
-      'Jogo 01: 01 03 04 05 08 09 11 12 14 15 17 20 21 23 25'
+    Lê um TXT do Wizard e extrai jogos.
+    Robusto: pega qualquer sequência válida de 15 dezenas (1..25, sem repetição) por linha,
+    mesmo que tenha textos como 'Jogo 01:' etc.
     """
     if not path.exists():
         raise FileNotFoundError(f"Arquivo de jogos não encontrado: {path}")
 
-    jogos: List[Tuple[int, ...]] = []
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    jogos: List[List[int]] = []
 
-    padrao = re.compile(r"Jogo\s+\d+:\s+(.+)$")
+    for line in lines:
+        # todos os números 1-2 dígitos na linha
+        nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", line)]
+        if len(nums) < 15:
+            continue
 
-    with path.open("r", encoding="utf-8") as f:
-        for linha in f:
-            linha = linha.strip()
-            m = padrao.search(linha)
-            if not m:
-                continue
-
-            numeros_str = m.group(1).split()
-            try:
-                dezenas = tuple(int(x) for x in numeros_str)
-            except ValueError:
-                continue
-
-            if len(dezenas) == 15:
-                jogos.append(dezenas)
+        # procura um bloco de 15 dezenas válido dentro da linha
+        for i in range(0, len(nums) - 14):
+            bloco = nums[i : i + 15]
+            if all(1 <= n <= 25 for n in bloco) and len(set(bloco)) == 15:
+                jogos.append(sorted(bloco))
+                break  # um jogo por linha já basta
 
     if not jogos:
         raise ValueError(
-            "Nenhum jogo foi encontrado no arquivo. "
-            "Confirme se é um TXT gerado pelo wizard."
+            "Nenhum jogo foi encontrado no arquivo. Confirme se é um TXT gerado pelo wizard."
         )
 
     return jogos
 
 
-def contar_acertos(jogo: Tuple[int, ...], dezenas_sorteadas: Tuple[int, ...]) -> int:
-    return len(set(jogo).intersection(dezenas_sorteadas))
+# =========================
+# Leitura base histórica
+# =========================
+
+def carregar_base(base_path: Path) -> pd.DataFrame:
+    if not base_path.exists():
+        raise FileNotFoundError(f"Base histórica não encontrada: {base_path}")
+
+    df = pd.read_excel(base_path)
+
+    esperadas = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
+    faltando = [c for c in esperadas if c not in df.columns]
+    if faltando:
+        raise ValueError(f"Colunas faltando na base: {faltando}")
+
+    # garante ordenação
+    df = df.sort_values("Concurso").reset_index(drop=True)
+    return df
+
+
+def ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
+    return df.tail(n).reset_index(drop=True)
 
 
 # =========================
 # Backtest
 # =========================
-def backtest_jogos(
-    df_base: pd.DataFrame,
-    jogos: List[Tuple[int, ...]],
-    ultimos: int,
-) -> pd.DataFrame:
-    """
-    Para cada concurso nos últimos N, calcula quantos acertos cada jogo teve.
-    Retorna um DataFrame com estatísticas agregadas.
-    """
-    if ultimos <= 0:
-        raise ValueError("--ultimos deve ser > 0")
 
-    df = df_base.tail(ultimos).copy()
+def acertos(jogo: List[int], concurso_row: pd.Series) -> int:
+    dezenas_sorteadas = {int(concurso_row[f"D{i}"]) for i in range(1, 16)}
+    return len(set(jogo) & dezenas_sorteadas)
 
-    resultados = []
-    for _, linha in df.iterrows():
-        concurso = int(linha["Concurso"])
-        dezenas_concurso = tuple(int(linha[f"D{i}"]) for i in range(1, 16))
 
-        for idx, jogo in enumerate(jogos, start=1):
-            acertos = contar_acertos(jogo, dezenas_concurso)
-            resultados.append(
-                {
-                    "Concurso": concurso,
-                    "Jogo": idx,
-                    "Acertos": acertos,
-                }
-            )
+@dataclass
+class Stats:
+    jogo_idx: int
+    media: float
+    mediana: float
+    maximo: int
+    minimo: int
+    dist: Dict[int, int]  # quantas vezes fez X acertos
 
-    res_df = pd.DataFrame(resultados)
 
-    # Estatísticas por jogo
-    resumo_jogo = (
-        res_df.groupby("Jogo")["Acertos"]
-        .agg(
-            media_acertos="mean",
-            max_acertos="max",
-            min_acertos="min",
+def backtest_jogos(jogos: List[List[int]], ultimos_df: pd.DataFrame) -> List[Stats]:
+    resultados: List[Stats] = []
+
+    for idx, jogo in enumerate(jogos, start=1):
+        lista_acertos = [acertos(jogo, row) for _, row in ultimos_df.iterrows()]
+
+        dist: Dict[int, int] = {}
+        for a in lista_acertos:
+            dist[a] = dist.get(a, 0) + 1
+
+        s = Stats(
+            jogo_idx=idx,
+            media=float(pd.Series(lista_acertos).mean()),
+            mediana=float(pd.Series(lista_acertos).median()),
+            maximo=int(max(lista_acertos)),
+            minimo=int(min(lista_acertos)),
+            dist=dist,
         )
-        .reset_index()
-    )
+        resultados.append(s)
 
-    # Distribuição de faixas (11 a 15)
-    dist_faixas = (
-        res_df.assign(
-            faixa=lambda d: d["Acertos"].apply(
-                lambda x: x if 11 <= x <= 15 else None
-            )
-        )
-        .dropna(subset=["faixa"])
-        .groupby(["Jogo", "faixa"])
-        .size()
-        .unstack(fill_value=0)
-        .reset_index()
-        .rename_axis(None, axis=1)
-    )
-
-    resumo_final = pd.merge(resumo_jogo, dist_faixas, on="Jogo", how="left").fillna(0)
-
-    # ordena por melhor desempenho médio
-    resumo_final = resumo_final.sort_values("media_acertos", ascending=False).reset_index(
-        drop=True
-    )
-
-    return resumo_final
+    return resultados
 
 
-def imprimir_resumo(resumo: pd.DataFrame, ultimos: int) -> None:
-    print("\n========================================")
-    print(f"        BACKTEST - ÚLTIMOS {ultimos} CONCURSOS")
-    print("========================================\n")
+def stats_to_df(stats: List[Stats]) -> pd.DataFrame:
+    # Descobre todas as chaves de dist presentes (ex.: 11,12,13...)
+    all_keys = sorted({k for s in stats for k in s.dist.keys()})
 
-    for _, row in resumo.iterrows():
-        jogo_idx = int(row["Jogo"])
-        media = row["media_acertos"]
-        max_a = int(row["max_acertos"])
-        min_a = int(row["min_acertos"])
+    rows = []
+    for s in stats:
+        row = {
+            "Jogo": s.jogo_idx,
+            "media_acertos": round(s.media, 4),
+            "mediana_acertos": round(s.mediana, 4),
+            "max_acertos": s.maximo,
+            "min_acertos": s.minimo,
+        }
+        for k in all_keys:
+            # colunas como "11.0" para casar com o que você já viu
+            row[f"{float(k):.1f}"] = int(s.dist.get(k, 0))
+        rows.append(row)
 
-        dist_desc = []
-        for faixa in [11, 12, 13, 14, 15]:
-            if faixa in resumo.columns:
-                qtd = int(row.get(faixa, 0))
-                if qtd > 0:
-                    dist_desc.append(f"{faixa} pts: {qtd}x")
+    df = pd.DataFrame(rows)
+    # Ordena por melhor média
+    df = df.sort_values(["media_acertos", "max_acertos"], ascending=[False, False]).reset_index(drop=True)
+    return df
 
-        dist_str = " | ".join(dist_desc) if dist_desc else "Nenhum jogo fez 11+ pontos."
 
-        print(f"Jogo {jogo_idx:02d}:")
-        print(f"  Média de acertos: {media:.2f}")
-        print(f"  Máx / Mín: {max_a} / {min_a}")
-        print(f"  Distribuição (11 a 15): {dist_str}")
-        print()
-
+# =========================
+# CLI
+# =========================
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Backtest dos jogos gerados pelo Wizard Lotofácil.\n\n"
-            "Exemplo de uso:\n"
-            "  python scripts/backtest.py "
-            "--jogos-file outputs/jogos_agressivo_2026-01-14_16-02-08.txt "
-            "--ultimos 100"
-        ),
-        formatter_class=argparse.RawTextHelpFormatter,
-    )
-    parser.add_argument(
-        "--jogos-file",
-        type=str,
-        required=True,
-        help="Caminho para o TXT gerado pelo wizard (outputs/...).",
-    )
-    parser.add_argument(
-        "--ultimos",
-        type=int,
-        default=100,
-        help="Quantidade de concursos para simular (default: 100).",
-    )
-    parser.add_argument(
-        "--csv-out",
-        type=str,
-        default=None,
-        help="(Opcional) Caminho para salvar o resumo em CSV.",
-    )
-
+    parser = argparse.ArgumentParser(description="Backtest dos jogos gerados pelo Wizard.")
+    parser.add_argument("--jogos-file", required=True, help="TXT com jogos gerados pelo wizard")
+    parser.add_argument("--base", default="base/base_limpa.xlsx", help="Base limpa (xlsx)")
+    parser.add_argument("--ultimos", type=int, default=200, help="Quantos concursos usar no backtest")
+    parser.add_argument("--csv-out", required=True, help="Saída CSV (ex.: outputs/backtest_agressivo_x.csv)")
     args = parser.parse_args()
 
-    base_df = carregar_base_limpa(BASE_LIMPA_PATH)
-    jogos = parse_jogos_arquivo(Path(args.jogos_file))
-    resumo = backtest_jogos(base_df, jogos, args.ultimos)
+    jogos_file = Path(args.jogos_file)
+    base_path = Path(args.base)
+    csv_out = Path(args.csv_out)
 
-    # imprime no console
-    imprimir_resumo(resumo, args.ultimos)
+    base_df = carregar_base(base_path)
+    ult_df = ultimos_concursos(base_df, args.ultimos)
 
-    # salva CSV se pedido
-    if args.csv_out:
-        out_path = Path(args.csv_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        resumo.to_csv(out_path, index=False, float_format="%.4f")
-        print(f"\n📁 Resumo salvo em: {out_path}")
+    jogos = parse_jogos_arquivo(jogos_file)
+    stats = backtest_jogos(jogos, ult_df)
+    out_df = stats_to_df(stats)
+
+    csv_out.parent.mkdir(parents=True, exist_ok=True)
+    out_df.to_csv(csv_out, index=False, encoding="utf-8")
+
+    print("\n========================================")
+    print("        BACKTEST DOS JOGOS GERADOS      ")
+    print("========================================")
+    print(f"Arquivo jogos: {jogos_file}")
+    print(f"Concursos usados: {args.ultimos}")
+    print(f"Saída CSV: {csv_out}")
+    print("\nTop 5 por média:")
+    print(out_df.head(5).to_string(index=False))
 
 
 if __name__ == "__main__":
