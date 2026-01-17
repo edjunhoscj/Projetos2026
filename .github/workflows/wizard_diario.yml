@@ -46,15 +46,16 @@ jobs:
       - name: Gerar combinações inteligentes
         run: python scripts/gerar_combinacoes.py
 
-      - name: Rodar Wizard + Backtest (agressivo e conservador)
+      - name: Rodar Wizard (agressivo, conservador e backtest + relatórios)
         env:
           ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
           FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           set -e
           mkdir -p outputs
+
           DATA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y_%Hh%Mmin")
-          DIA=$(TZ="America/Sao_Paulo" date +"%d-%m-%Y")
+          echo "DATA=$DATA" >> $GITHUB_ENV
           echo "Timestamp usado: ${DATA}"
 
           echo "Modo agressivo..."
@@ -77,27 +78,19 @@ jobs:
             --ultimos 200 \
             --csv-out "outputs/backtest_conservador_${DATA}.csv"
 
-          echo "Gerar relatorio mastigado..."
+          echo "Relatório mastigado (TXT)..."
           python scripts/relatorio_mastigado.py \
             --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
             --conservador "outputs/backtest_conservador_${DATA}.csv" \
             --out "outputs/relatorio_mastigado_${DATA}.txt" \
-            --data "${DIA}"
+            --data "${DATA%%_*}"
 
-          echo "Gerar dashboard (PNG + CSV)..."
-          python scripts/dashboard.py
+          echo "Relatório completo (TXT)..."
+          python scripts/gerar_relatorio_completo.py \
+            --data "${DATA}" \
+            --out "outputs/relatorio_completo_${DATA}.txt"
 
-          echo "Gerar ranking acumulado..."
-          python scripts/ranking_acumulado.py
 
-          echo "Gerar relatorio completo (TXT)..."
-          python scripts/gerar_relatorio_completo.py
-
-          echo "Gerar relatorio diário do desempenho (TXT - tudo junto)..."
-          python scripts/relatorio_diario.py \
-            --timestamp "${DATA}" \
-            --data "${DIA}" \
-            --out "outputs/relatorio_diario_${DATA}.txt"
 
       - name: Commit e push dos resultados
         run: |
