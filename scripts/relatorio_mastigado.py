@@ -2,171 +2,78 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from datetime import datetime
-
 import pandas as pd
 
 
-def _read_backtest_csv(path: Path) -> pd.DataFrame:
+def _read_csv(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {path}")
-
-    df = pd.read_csv(path)
-
-    # normaliza nomes comuns
-    rename = {}
-    for col in df.columns:
-        c = col.strip().lower()
-        if c == "jogo":
-            rename[col] = "jogo"
-        elif c in ("media_acertos", "média_acertos", "media"):
-            rename[col] = "media_acertos"
-        elif c in ("max_acertos", "max"):
-            rename[col] = "max_acertos"
-        elif c in ("min_acertos", "min"):
-            rename[col] = "min_acertos"
-    df = df.rename(columns=rename)
-
-    required = {"jogo", "media_acertos", "max_acertos", "min_acertos"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"Colunas obrigatórias faltando em {path}: {sorted(missing)}")
-
-    # garante tipos
-    df["jogo"] = pd.to_numeric(df["jogo"], errors="coerce")
-    df["media_acertos"] = pd.to_numeric(df["media_acertos"], errors="coerce")
-    df["max_acertos"] = pd.to_numeric(df["max_acertos"], errors="coerce")
-    df["min_acertos"] = pd.to_numeric(df["min_acertos"], errors="coerce")
-    df = df.dropna(subset=["jogo", "media_acertos", "max_acertos", "min_acertos"]).copy()
-
-    # colunas "11.0, 12.0, 13.0..." (se existirem)
-    # mantém como strings para exibir bonito
-    for col in df.columns:
-        if col not in required:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
-
-    return df
+    return pd.read_csv(path)
 
 
-def _pick_best(df: pd.DataFrame) -> dict:
-    # Melhor geral: maior média (desempate: maior max, maior min)
-    best = df.sort_values(
-        by=["media_acertos", "max_acertos", "min_acertos"],
-        ascending=[False, False, False],
-    ).iloc[0]
+def _tabela(df: pd.DataFrame, top: int = 20) -> str:
+    # garante colunas principais no começo
+    cols_fixas = ["Jogo", "media_acertos", "mediana_acertos", "max_acertos", "min_acertos"]
+    cols_fixas = [c for c in cols_fixas if c in df.columns]
+    cols_rest = [c for c in df.columns if c not in cols_fixas]
+    df2 = df[cols_fixas + cols_rest].copy()
 
-    # Explosivo: maior max (desempate: maior média)
-    explosivo = df.sort_values(
-        by=["max_acertos", "media_acertos", "min_acertos"],
-        ascending=[False, False, False],
-    ).iloc[0]
-
-    # Estável: maior min (desempate: maior média)
-    estavel = df.sort_values(
-        by=["min_acertos", "media_acertos", "max_acertos"],
-        ascending=[False, False, False],
-    ).iloc[0]
-
-    return {
-        "best": best,
-        "explosivo": explosivo,
-        "estavel": estavel,
-    }
+    return df2.head(top).to_string(index=False)
 
 
-def _format_table(df: pd.DataFrame) -> str:
-    show_cols = ["jogo", "media_acertos", "max_acertos", "min_acertos"]
-    # inclui colunas de contagem (11.0, 12.0, 13.0...) se existirem
-    extra = [c for c in df.columns if c not in show_cols]
-    extra_sorted = sorted(extra, key=lambda x: float(str(x).replace(",", ".")) if str(x).replace(".", "", 1).isdigit() else 9999)
-    cols = show_cols + extra_sorted
+def main() -> None:
+    p = argparse.ArgumentParser(description="Gera relatório mastigado (TXT) a partir dos CSVs do backtest.")
+    p.add_argument("--agressivo", required=True, help="CSV do backtest agressivo")
+    p.add_argument("--conservador", required=True, help="CSV do backtest conservador")
+    p.add_argument("--out", required=True, help="Saída TXT (ex.: outputs/relatorio_mastigado.txt)")
+    p.add_argument("--data", default="", help="Data opcional para cabeçalho (ex.: 15-01-2026)")
 
-    out = df[cols].copy()
-
-    out["jogo"] = out["jogo"].astype(int)
-    out["media_acertos"] = out["media_acertos"].map(lambda x: f"{x:.4f}")
-    out["max_acertos"] = out["max_acertos"].astype(int)
-    out["min_acertos"] = out["min_acertos"].astype(int)
-
-    # deixa ordenado por melhor média
-    out = out.sort_values(by=["media_acertos"], ascending=False)
-
-    return out.to_string(index=False)
-
-
-def _section(mode_name: str, df: pd.DataFrame) -> str:
-    picks = _pick_best(df)
-    best = picks["best"]
-    explosivo = picks["explosivo"]
-    estavel = picks["estavel"]
-
-    # tenta pegar contagens de 11/12/13 se houver
-    def get_count(row, colname: str) -> int | None:
-        return int(row[colname]) if colname in df.columns else None
-
-    c11 = get_count(best, "11.0")
-    c12 = get_count(best, "12.0")
-    c13 = get_count(best, "13.0")
-
-    lines = []
-    lines.append(f"------------ BACKTEST — MODO {mode_name.upper()} ------------")
-    lines.append(_format_table(df))
-    lines.append("")
-    lines.append("🧠 Leitura mastigada:")
-    lines.append(f"• Melhor geral: Jogo {int(best['jogo'])}  | média {best['media_acertos']:.2f} | max {int(best['max_acertos'])} | min {int(best['min_acertos'])}")
-    if c11 is not None and c12 is not None and c13 is not None:
-        lines.append(f"  ↳ ocorrência (11/12/13): {c11}/{c12}/{c13}")
-    lines.append(f"• Mais explosivo (maior pico): Jogo {int(explosivo['jogo'])} | max {int(explosivo['max_acertos'])} | média {explosivo['media_acertos']:.2f}")
-    lines.append(f"• Mais estável (melhor piso): Jogo {int(estavel['jogo'])} | min {int(estavel['min_acertos'])} | média {estavel['media_acertos']:.2f}")
-    lines.append("")
-    return "\n".join(lines), int(best["jogo"])
-
-
-def main():
-    p = argparse.ArgumentParser(description="Gera relatório mastigado do backtest (agressivo + conservador).")
-    p.add_argument("--agressivo", type=str, required=True, help="CSV do backtest agressivo")
-    p.add_argument("--conservador", type=str, required=True, help="CSV do backtest conservador")
-    p.add_argument("--out", type=str, required=True, help="TXT de saída do relatório")
-    p.add_argument("--data", type=str, default="", help="Data a imprimir no topo (opcional)")
     args = p.parse_args()
 
-    ag_csv = Path(args.agressivo)
-    co_csv = Path(args.conservador)
-    out_path = Path(args.out)
+    ag = Path(args.agressivo)
+    co = Path(args.conservador)
+    out = Path(args.out)
 
-    df_ag = _read_backtest_csv(ag_csv)
-    df_co = _read_backtest_csv(co_csv)
+    df_ag = _read_csv(ag)
+    df_co = _read_csv(co)
 
-    if not args.data:
-        data_str = datetime.now().strftime("%d-%m-%Y")
-    else:
-        data_str = args.data
+    out.parent.mkdir(parents=True, exist_ok=True)
 
-    header = [
-        "==============================================",
-        "        RELATÓRIO MASTIGADO DO BACKTEST",
-        f"        DATA: {data_str}",
-        "==============================================",
-        "",
-    ]
+    data = args.data.strip()
+    cab_data = f"DATA: {data}\n" if data else ""
 
-    sec_ag, best_ag = _section("agressivo", df_ag)
-    sec_co, best_co = _section("conservador", df_co)
+    texto = []
+    texto.append("==============================================")
+    texto.append("   RELATÓRIO MASTIGADO DO BACKTEST (TXT)")
+    if cab_data:
+        texto.append(cab_data.rstrip())
+    texto.append("==============================================\n")
 
-    # recomendação final simples e clara
-    rec = []
-    rec.append("============ RECOMENDAÇÃO FINAL ============")
-    rec.append(f"✔ Se apostar só 1 jogo (mais consistente): use o melhor do AGRESSIVO (Jogo {best_ag})")
-    rec.append(f"✔ Para 2 jogos: melhor AGRESSIVO (Jogo {best_ag}) + melhor CONSERVADOR (Jogo {best_co})")
-    rec.append("✔ Para 3 jogos: melhor AGRESSIVO + melhor CONSERVADOR + o mais explosivo (max maior) do modo que preferir")
-    rec.append("============================================")
-    rec.append("")
+    texto.append("------------ BACKTEST — MODO AGRESSIVO ------------")
+    texto.append("Resumo por jogo (ordenado pela melhor média):\n")
+    texto.append(_tabela(df_ag))
+    texto.append("\n")
 
-    text = "\n".join(header) + sec_ag + sec_co + "\n".join(rec)
+    texto.append("------------ BACKTEST — MODO CONSERVADOR ------------")
+    texto.append("Resumo por jogo (ordenado pela melhor média):\n")
+    texto.append(_tabela(df_co))
+    texto.append("\n")
 
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(text, encoding="utf-8")
-    print(f"✅ Relatório gerado em: {out_path}")
+    # Melhor do dia (por média)
+    best_ag = df_ag.iloc[0]
+    best_co = df_co.iloc[0]
+
+    texto.append("============ INTERPRETAÇÃO RÁPIDA ============")
+    texto.append(f"Melhor do agressivo: Jogo {int(best_ag['Jogo'])} | média {best_ag['media_acertos']:.2f} | max {int(best_ag['max_acertos'])} | min {int(best_ag['min_acertos'])}")
+    texto.append(f"Melhor do conservador: Jogo {int(best_co['Jogo'])} | média {best_co['media_acertos']:.2f} | max {int(best_co['max_acertos'])} | min {int(best_co['min_acertos'])}")
+    texto.append("\nRecomendação prática:")
+    texto.append("✔ Se for jogar 1 só: pegue o melhor do agressivo (maior média / maior teto)")
+    texto.append("✔ Se for jogar 2: melhor agressivo + melhor conservador")
+    texto.append("✔ Se for jogar 3: melhor agressivo + melhor conservador + 2º melhor conservador (ou o mais estável)")
+    texto.append("==============================================\n")
+
+    out.write_text("\n".join(texto), encoding="utf-8")
+    print(f"OK: gerado {out}")
 
 
 if __name__ == "__main__":
