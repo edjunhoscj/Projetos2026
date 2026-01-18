@@ -118,6 +118,7 @@ jobs:
       # 2) BACKTEST (CSV + TXT)
       #  ⚠️ CORREÇÃO PRINCIPAL: backtest.py exige --csv-out e --out
       # -----------------------------
+      
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
           python scripts/backtest.py \
@@ -125,8 +126,8 @@ jobs:
             --base "base/base_limpa.xlsx" \
             --ultimos 20 \
             --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
-            --out     "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
-
+          | tee "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
+      
           cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_agressivo.csv"
           cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt"
 
@@ -137,7 +138,7 @@ jobs:
             --base "base/base_limpa.xlsx" \
             --ultimos 20 \
             --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
-            --out     "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt"
+          | tee "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt"
 
           cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_conservador.csv"
           cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt"
