@@ -60,11 +60,11 @@ jobs:
 
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            > "outputs/jogos_agressivo_${DATA}.txt"
+            >| tee "outputs/jogos_agressivo_${DATA}.txt"
 
           echo "Modo conservador..."
           python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            > "outputs/jogos_conservador_${DATA}.txt"
+            >| tee "outputs/jogos_conservador_${DATA}.txt"
 
           echo "Backtest agressivo..."
           echo "Arquivo: outputs/jogos_agressivo_${DATA}.txt"
