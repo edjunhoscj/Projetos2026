@@ -79,12 +79,15 @@ jobs:
           python -V
           pip install -r requirements.txt
       
+    
       - name: Debug - listar arquivos
         run: |
           pwd
-          ls -ლა
-          echo "---- scripts/ ----"
-          ls -la scripts || true
+          echo "Listando raiz:"
+          ls -la
+          echo "Listando outputs:"
+          ls -la outputs || true
+
       
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
