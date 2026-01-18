@@ -44,12 +44,24 @@ jobs:
           python wizard_cli.py --modo agressivo --ultimos 20 --finais 5 \
             | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
       
+      - name: Criar atalho fixo - AGRESSIVO
+        run: |
+          ULTIMO=$(ls -t outputs/jogos_agressivo_*.txt | head -n 1)
+          cp "$ULTIMO" outputs/jogos_agressivo.txt
+
+
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
         run: |
           echo "Modo conservador..."
           python wizard_cli.py --modo conservador --ultimos 20 --finais 5 \
             | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
       
+      - name: Criar atalho fixo - CONSERVADOR
+        run: |
+          ULTIMO=$(ls -t outputs/jogos_conservador_*.txt | head -n 1)
+          cp "$ULTIMO" outputs/jogos_conservador.txt
+
+
       # -----------------------------
       # 2) BACKTEST (CSV + TXT FORMATADO)
       # -----------------------------
