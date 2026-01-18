@@ -1,171 +1,226 @@
-name: Wizard Lotofacil Diário
+#!/usr/bin/env python3
+from __future__ import annotations
 
-on:
-  schedule:
-    # 18:00 em Brasília (UTC-3) => 21:00 UTC
-    - cron: "0 21 * * 1-5"
-  workflow_dispatch:
-    inputs:
-      ultimos:
-        description: "Quantidade de últimos concursos"
-        required: false
-        default: "20"
-      finais:
-        description: "Quantidade de jogos finais"
-        required: false
-        default: "5"
+import argparse
+import re
+from pathlib import Path
+from typing import List, Set, Tuple, Optional
 
-permissions:
-  contents: write
+import pandas as pd
 
-jobs:
-  rodar-wizard:
-    runs-on: ubuntu-latest
 
-    steps:
-      # 0) CHECKOUT PRIMEIRO (senão apaga o que você gerou antes)
-      - name: Checkout
-        uses: actions/checkout@v4
+# -------------------------
+# Parse de jogos (robusto)
+# -------------------------
+def parse_jogos_arquivo(path: Path) -> List[Tuple[int, ...]]:
+    """
+    Lê um TXT e extrai jogos de 15 dezenas (1..25), aceitando formatos como:
+      - "02 03 05 ... 23"
+      - "Jogo 01: 02 03 05 ... 23"
+      - linhas com textos/emoji antes ou depois
+    Regra: pega linhas que contenham EXATAMENTE 15 números válidos (1..25).
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {path}")
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+    jogos: List[Tuple[int, ...]] = []
 
-      - name: Instalar dependencias
-        run: |
-          python -V
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
 
-      - name: Preparar outputs
-        run: |
-          mkdir -p outputs
-          touch outputs/.gitkeep
+        # extrai todos números 1-2 dígitos
+        nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", line)]
+        # filtra somente 1..25
+        nums = [n for n in nums if 1 <= n <= 25]
 
-      - name: Definir timestamp
-        id: ts
-        run: |
-          echo "TS=$(TZ='America/Sao_Paulo' date +'%d-%m-%Y_%Hh%Mmin')" >> $GITHUB_OUTPUT
-          echo "DATA=$(TZ='America/Sao_Paulo' date +'%d-%m-%Y')" >> $GITHUB_OUTPUT
-          echo "Timestamp usado: $(TZ='America/Sao_Paulo' date +'%d-%m-%Y_%Hh%Mmin')"
+        if len(nums) == 15:
+            # mantém a ordem do arquivo, mas valida se são 15 distintas
+            if len(set(nums)) == 15:
+                jogos.append(tuple(nums))
 
-      # -----------------------------
-      # 1) ATUALIZAR BASE / COMBINACOES
-      # -----------------------------
-      - name: Atualizar base da Caixa (ultimos 1000)
-        run: python scripts/atualizar_base.py --ultimos 1000
+    # fallback: às vezes o arquivo tem linhas quebradas ou formatos estranhos
+    # então tentamos encontrar sequências de 15 números no arquivo inteiro.
+    if not jogos:
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        nums_all = [int(x) for x in re.findall(r"\b\d{1,2}\b", content)]
+        nums_all = [n for n in nums_all if 1 <= n <= 25]
 
-      - name: Gerar base limpa
-        run: python scripts/gerar_base_limpa.py
+        # procura janelas de 15 números distintos
+        for i in range(0, max(0, len(nums_all) - 14)):
+            window = nums_all[i : i + 15]
+            if len(window) == 15 and len(set(window)) == 15:
+                jogos.append(tuple(window))
+                # normalmente já basta (mas deixo coletar mais se houver)
 
-      - name: Gerar combinacoes inteligentes
-        run: python scripts/gerar_combinacoes.py
+    # remove duplicados mantendo ordem
+    seen = set()
+    jogos_uni = []
+    for j in jogos:
+        if j not in seen:
+            seen.add(j)
+            jogos_uni.append(j)
 
-      # -----------------------------
-      # 2) GERAR JOGOS (TXT)
-      # -----------------------------
-      - name: Rodar Wizard - AGRESSIVO (gera TXT)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
-        run: |
-          echo "Modo agressivo..."
-          python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
-          cp "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/jogos_agressivo.txt"
+    if not jogos_uni:
+        raise ValueError(
+            "Nenhum jogo foi encontrado no arquivo. "
+            "Confirme se é um TXT gerado pelo Wizard e contém linhas com 15 dezenas (1..25)."
+        )
 
-      - name: Rodar Wizard - CONSERVADOR (gera TXT)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
-        run: |
-          echo "Modo conservador..."
-          python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
-            | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
-          cp "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/jogos_conservador.txt"
+    return jogos_uni
 
-      - name: Debug - conferir se os 15 numeros aparecem nos TXT
-        run: |
-          echo "HEAD agressivo:"
-          head -n 80 outputs/jogos_agressivo.txt || true
-          echo "Procurando linha com 15 dezenas (agressivo)..."
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_agressivo.txt || true
 
-          echo "HEAD conservador:"
-          head -n 80 outputs/jogos_conservador.txt || true
-          echo "Procurando linha com 15 dezenas (conservador)..."
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_conservador.txt || true
+# -------------------------
+# Leitura da base de sorteios
+# -------------------------
+def _infer_dezenas_from_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Tenta inferir as 15 dezenas por linha da base.
+    Suporta:
+      - colunas já numéricas (15 colunas)
+      - colunas nomeadas tipo 'D1'..'D15', 'dez1'.. etc
+    Retorna DF com colunas d1..d15 (int).
+    """
+    # pega colunas numéricas
+    num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    # tenta usar as primeiras 15 numéricas
+    if len(num_cols) >= 15:
+        dez = df[num_cols[:15]].copy()
+        dez.columns = [f"d{i}" for i in range(1, 16)]
+        return dez.astype(int)
 
-      # -----------------------------
-      # 3) BACKTEST (CSV + TXT)
-      #   - backtest.py exige --csv-out
-      #   - TXT sai pelo stdout -> tee
-      # -----------------------------
-      - name: Backtest - AGRESSIVO (CSV + TXT)
-        run: |
-          python scripts/backtest.py \
-            --jogos-file "outputs/jogos_agressivo.txt" \
-            --base "base/base_limpa.xlsx" \
-            --ultimos 20 \
-            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
-          | tee "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
+    # tenta achar por nomes comuns
+    patterns = [
+        r"^d(?:ez)?\s*0*([1-9]|1[0-5])$",
+        r"^dezena\s*0*([1-9]|1[0-5])$",
+        r"^bola\s*0*([1-9]|1[0-5])$",
+    ]
+    pick = {}
+    for c in df.columns:
+        name = str(c).strip().lower()
+        for p in patterns:
+            m = re.match(p, name)
+            if m:
+                idx = int(m.group(1))
+                pick[idx] = c
 
-          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_agressivo.csv"
-          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt"
+    if len(pick) >= 15:
+        cols = [pick[i] for i in range(1, 16)]
+        dez = df[cols].copy()
+        dez.columns = [f"d{i}" for i in range(1, 16)]
+        return dez.astype(int)
 
-      - name: Backtest - CONSERVADOR (CSV + TXT)
-        run: |
-          python scripts/backtest.py \
-            --jogos-file "outputs/jogos_conservador.txt" \
-            --base "base/base_limpa.xlsx" \
-            --ultimos 20 \
-            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
-          | tee "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt"
+    raise ValueError(
+        "Não consegui inferir as 15 dezenas na base. "
+        "Garanta que a planilha tenha 15 colunas numéricas de dezenas por concurso."
+    )
 
-          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_conservador.csv"
-          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt"
 
-      # -----------------------------
-      # 4) DASHBOARD (PNG + CSV)
-      # -----------------------------
-      - name: Gerar dashboard (PNG + CSV)
-        run: python scripts/dashboard.py
+def carregar_base(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Base não encontrada: {path}")
 
-      # -----------------------------
-      # 5) RELATORIO MASTIGADO (TXT)
-      #   (use os CSV fixos, mais simples e não quebra por timestamp)
-      # -----------------------------
-      - name: Gerar relatorio mastigado (TXT)
-        run: |
-          python scripts/relatorio_mastigado.py \
-            --agressivo "outputs/backtest_agressivo.csv" \
-            --conservador "outputs/backtest_conservador.csv" \
-            --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
-            --data "${{ steps.ts.outputs.DATA }}"
+    # tenta Excel primeiro
+    if path.suffix.lower() in {".xlsx", ".xls"}:
+        df = pd.read_excel(path)
+    else:
+        df = pd.read_csv(path)
 
-      # -----------------------------
-      # 6) RELATORIO COMPLETO (TXT UNICO)
-      # -----------------------------
-      - name: Gerar relatorio completo (TXT)
-        run: |
-          python scripts/gerar_relatorio_completo.py \
-            --data "${{ steps.ts.outputs.DATA }}" \
-            --jogos-ag "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
-            --jogos-cons "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
-            --bt-ag-txt "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
-            --bt-cons-txt "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
-            --dash-resumo "outputs/dashboard_resumo_geral.csv" \
-            --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
-            --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
+    dezenas = _infer_dezenas_from_df(df)
+    return dezenas
 
-      # -----------------------------
-      # 7) COMMIT / PUSH
-      # -----------------------------
-      - name: Commit e push dos resultados
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add outputs base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
-          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + relatorios)" || echo "Nada para commitar"
-          git push
+
+# -------------------------
+# Backtest
+# -------------------------
+def backtest(jogos: List[Tuple[int, ...]], base_dezenas: pd.DataFrame, ultimos: int) -> pd.DataFrame:
+    # usa os últimos N concursos
+    base = base_dezenas.tail(int(ultimos)).reset_index(drop=True)
+
+    sorteios: List[Set[int]] = []
+    for _, row in base.iterrows():
+        s = set(int(row[f"d{i}"]) for i in range(1, 16))
+        sorteios.append(s)
+
+    rows = []
+    for idx, jogo in enumerate(jogos, start=1):
+        jogo_set = set(jogo)
+        acertos = [len(jogo_set & s) for s in sorteios]
+
+        # distribuição (11..15) – ajuste se quiser incluir mais faixas
+        dist = {k: sum(1 for a in acertos if a == k) for k in range(11, 16)}
+
+        rows.append(
+            {
+                "jogo": idx,
+                "media_acertos": float(sum(acertos) / len(acertos)) if acertos else 0.0,
+                "max_acertos": int(max(acertos)) if acertos else 0,
+                "min_acertos": int(min(acertos)) if acertos else 0,
+                **{f"{k}.0": dist[k] for k in range(11, 16)},  # compatível com seu layout 11.0,12.0...
+            }
+        )
+
+    df = pd.DataFrame(rows).sort_values(["media_acertos", "max_acertos"], ascending=False).reset_index(drop=True)
+    return df
+
+
+def df_to_txt(df: pd.DataFrame, titulo: str) -> str:
+    # mostra as colunas principais primeiro
+    cols = ["jogo", "media_acertos", "max_acertos", "min_acertos"] + [c for c in df.columns if c.endswith(".0")]
+    cols = [c for c in cols if c in df.columns]
+    out = []
+    out.append("=" * 46)
+    out.append(titulo)
+    out.append("=" * 46)
+    out.append(df[cols].to_string(index=False))
+    out.append("")
+    out.append("Legenda:")
+    out.append(" - media_acertos : média de acertos do jogo nos concursos analisados")
+    out.append(" - max_acertos   : maior número de acertos que o jogo já fez")
+    out.append(" - min_acertos   : menor número de acertos que o jogo já fez")
+    out.append(" - colunas 11.0..15.0 : quantas vezes o jogo fez 11, 12, 13, 14, 15 pontos")
+    out.append("")
+    return "\n".join(out)
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--jogos-file", required=True, help="TXT com jogos do Wizard")
+    ap.add_argument("--base", default="base/base_limpa.xlsx", help="Base histórica (xlsx/csv)")
+    ap.add_argument("--ultimos", type=int, default=20, help="Quantidade de concursos a usar no backtest")
+    ap.add_argument("--csv-out", required=True, help="Caminho do CSV de saída")
+
+    # compatibilidade: você às vezes tentou --out (txt). Vamos aceitar.
+    ap.add_argument("--out", dest="txt_out", default=None, help="(opcional) Caminho do TXT de saída")
+    ap.add_argument("--txt-out", dest="txt_out2", default=None, help="(opcional) Caminho do TXT de saída")
+
+    args = ap.parse_args()
+
+    jogos_file = Path(args.jogos_file)
+    base_file = Path(args.base)
+    csv_out = Path(args.csv_out)
+
+    txt_out: Optional[Path] = None
+    if args.txt_out2:
+        txt_out = Path(args.txt_out2)
+    elif args.txt_out:
+        txt_out = Path(args.txt_out)
+
+    jogos = parse_jogos_arquivo(jogos_file)
+    base = carregar_base(base_file)
+    df = backtest(jogos, base, args.ultimos)
+
+    csv_out.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_out, index=False)
+
+    # se não especificar TXT, cria um .txt ao lado do CSV
+    if txt_out is None:
+        txt_out = csv_out.with_suffix(".txt")
+
+    txt_out.parent.mkdir(parents=True, exist_ok=True)
+    txt_out.write_text(df_to_txt(df, "BACKTEST"), encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()
