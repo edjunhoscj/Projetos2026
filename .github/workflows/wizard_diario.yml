@@ -53,31 +53,36 @@ jobs:
       # -----------------------------
       # 2) BACKTEST (CSV + TXT FORMATADO)
       # -----------------------------
+      
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      
+      - name: Instalar dependencias
+        run: |
+          python -V
+          pip install -r requirements.txt
+      
+      - name: Debug - listar arquivos
+        run: |
+          pwd
+          ls -ლა
+          echo "---- scripts/ ----"
+          ls -la scripts || true
+      
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
-          echo "Backtest agressivo..."
-          python scripts/backtest.py \
-            --jogos-file "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
-            --base "base/base_limpa.xlsx" \
-            --ultimos 200 \
-            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv"
+          python scripts/backtest.py --jogos-file "outputs/jogos_agressivo.txt" --out "outputs/backtest_agressivo.csv"
       
-          python scripts/formatar_backtest.py \
-            "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
-            --out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
       
       - name: Backtest - CONSERVADOR (CSV + TXT)
         run: |
-          echo "Backtest conservador..."
-          python scripts/backtest.py \
-            --jogos-file "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
-            --base "base/base_limpa.xlsx" \
-            --ultimos 200 \
-            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv"
-      
-          python scripts/formatar_backtest.py \
-            "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
-            --out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt"
+          python scripts/backtest.py --jogos-file "outputs/jogos_conservador.txt" --out "outputs/backtest_conservador.csv"
+
       
       # -----------------------------
       # 3) DASHBOARD (PNG + CSV) - se você usa
