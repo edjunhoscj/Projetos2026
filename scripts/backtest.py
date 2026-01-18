@@ -36,40 +36,33 @@ def _extrair_15_dezenas_da_linha(line: str) -> List[int] | None:
     return None
 
 
-def parse_jogos_arquivo(path: Path) -> List[Tuple[int, ...]]:
+import re
+from pathlib import Path
+
+def parse_jogos_arquivo(path: Path):
     """
-    Lê um TXT gerado pelo wizard e retorna lista de jogos (tuplas ordenadas).
-    É tolerante a logs, cabeçalhos e texto no meio.
+    Lê um TXT do Wizard e extrai jogos com 15 dezenas.
+    Aceita linhas:
+      - "02 03 05 ... 23"
+      - "Jogo 01: 02 03 05 ... 23"
     """
-    if not path.exists():
+    if not Path(path).exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {path}")
 
-    jogos: List[Tuple[int, ...]] = []
+    jogos = []
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        for line in f:
+            nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", line)]
+            # filtra só dezenas válidas 1..25
+            nums = [n for n in nums if 1 <= n <= 25]
 
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        dezenas = _extrair_15_dezenas_da_linha(line)
-        if dezenas:
-            jogos.append(tuple(dezenas))
+            if len(nums) == 15:
+                jogos.append(sorted(nums))
 
-    # remove duplicados preservando ordem
-    jogos_unicos: List[Tuple[int, ...]] = []
-    seen = set()
-    for j in jogos:
-        if j not in seen:
-            seen.add(j)
-            jogos_unicos.append(j)
+    if not jogos:
+        raise ValueError("Nenhum jogo foi encontrado no arquivo. Confirme se é um TXT gerado pelo wizard.")
 
-    if not jogos_unicos:
-        raise ValueError(
-            "Nenhum jogo foi encontrado no arquivo. "
-            "Confirme se é um TXT gerado pelo wizard (com 15 dezenas por jogo)."
-        )
-
-    return jogos_unicos
-
+    return jogos
 
 # =========================
 # Backtest
