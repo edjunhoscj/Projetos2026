@@ -1,73 +1,79 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 
-def read_text_safe(path: Path) -> str:
+def _agora_sp() -> str:
+    return datetime.now().strftime("%d-%m-%Y")
+
+
+def _read_text_if_exists(path: Path, max_lines: int | None = None) -> str:
     if not path.exists():
-        return f"[AVISO] Arquivo não encontrado: {path}\n"
-    return path.read_text(encoding="utf-8", errors="replace")
+        return f"[NAO ENCONTRADO] {path}"
+    txt = path.read_text(encoding="utf-8", errors="ignore")
+    if max_lines is not None:
+        lines = txt.splitlines()[:max_lines]
+        return "\n".join(lines)
+    return txt
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Gera um relatório completo (TXT) juntando outputs do dia.")
-    p.add_argument("--data", required=True, help="Data no formato DD-MM-YYYY_HHhMMmin (mesmo timestamp do workflow)")
-    p.add_argument("--out", default="", help="Saída TXT. Se vazio, usa outputs/relatorio_completo_{data}.txt")
+    parser = argparse.ArgumentParser(description="Gera um TXT unico com tudo do dia (jogos + backtests + dashboards).")
+    parser.add_argument("--data", required=False, help="DD-MM-YYYY (apenas para o cabecalho)")
+    parser.add_argument("--jogos-ag", required=True, help="TXT jogos agressivo do dia")
+    parser.add_argument("--jogos-cons", required=True, help="TXT jogos conservador do dia")
+    parser.add_argument("--bt-ag-txt", required=False, help="TXT backtest agressivo (opcional)")
+    parser.add_argument("--bt-cons-txt", required=False, help="TXT backtest conservador (opcional)")
+    parser.add_argument("--dash-resumo", required=False, help="CSV resumo geral (opcional)")
+    parser.add_argument("--dash-dist", required=False, help="CSV distribuicao acertos (opcional)")
+    parser.add_argument("--out", required=False, help="Arquivo final TXT (opcional)")
+    args = parser.parse_args()
 
-    args = p.parse_args()
-    data = args.data.strip()
-
-    out = Path(args.out) if args.out.strip() else Path(f"outputs/relatorio_completo_{data}.txt")
+    data = args.data or _agora_sp()
+    out = Path(args.out) if args.out else Path("outputs") / f"relatorio_completo_{data}.txt"
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    # Arquivos padrão do seu pipeline
-    jogos_ag = Path(f"outputs/jogos_agressivo_{data}.txt")
-    jogos_co = Path(f"outputs/jogos_conservador_{data}.txt")
-    bt_ag_csv = Path(f"outputs/backtest_agressivo_{data}.csv")
-    bt_co_csv = Path(f"outputs/backtest_conservador_{data}.csv")
-    bt_ag_txt = Path(f"outputs/backtest_agressivo_{data}.txt")  # se você estiver gerando
-    bt_co_txt = Path(f"outputs/backtest_conservador_{data}.txt")  # se você estiver gerando
-    dashboard_resumo = Path("outputs/dashboard_resumo_geral.csv")
-    dashboard_dist = Path("outputs/dashboard_distribuicao_acertos.csv")
-    ranking_txt = Path("outputs/ranking_acumulado.txt")
-    ranking_csv = Path("outputs/ranking_acumulado.csv")
-
     parts = []
-    parts.append("==============================================")
-    parts.append("        RELATÓRIO COMPLETO DO WIZARD")
+    parts.append("=" * 46)
+    parts.append("        RELATORIO COMPLETO DO WIZARD")
     parts.append(f"        DATA: {data}")
-    parts.append("==============================================\n")
+    parts.append("=" * 46)
+    parts.append("")
 
-    parts.append("------------ BACKTEST — AGRESSIVO (CSV) ------------")
-    parts.append(read_text_safe(bt_ag_csv))
-    parts.append("\n------------ BACKTEST — CONSERVADOR (CSV) ------------")
-    parts.append(read_text_safe(bt_co_csv))
+    # Backtests (TXT já formatado)
+    if args.bt_ag_txt:
+        parts.append("------------ BACKTEST — MODO AGRESSIVO ------------")
+        parts.append(_read_text_if_exists(Path(args.bt_ag_txt)))
+        parts.append("")
 
-    parts.append("\n------------ BACKTEST FORMATADO (TXT) ------------")
-    parts.append("AGRESSIVO:\n")
-    parts.append(read_text_safe(bt_ag_txt))
-    parts.append("\nCONSERVADOR:\n")
-    parts.append(read_text_safe(bt_co_txt))
+    if args.bt_cons_txt:
+        parts.append("------------ BACKTEST — MODO CONSERVADOR ------------")
+        parts.append(_read_text_if_exists(Path(args.bt_cons_txt)))
+        parts.append("")
 
-    parts.append("\n------------ DASHBOARD (RESUMO) ------------")
-    parts.append(read_text_safe(dashboard_resumo))
+    # Dashboards CSV (coloca “mastigado” no txt)
+    if args.dash_resumo:
+        parts.append("------------ DASHBOARD — RESUMO GERAL (CSV) ------------")
+        parts.append(_read_text_if_exists(Path(args.dash_resumo), max_lines=200))
+        parts.append("")
 
-    parts.append("\n------------ DASHBOARD (DISTRIBUIÇÃO) ------------")
-    parts.append(read_text_safe(dashboard_dist))
+    if args.dash_dist:
+        parts.append("------------ DASHBOARD — DISTRIBUICAO DE ACERTOS (CSV) ------------")
+        parts.append(_read_text_if_exists(Path(args.dash_dist), max_lines=200))
+        parts.append("")
 
-    parts.append("\n------------ RANKING ACUMULADO ------------")
-    parts.append(read_text_safe(ranking_txt))
-    parts.append("\n(Ranking CSV)")
-    parts.append(read_text_safe(ranking_csv))
-
-    parts.append("\n------------ JOGOS GERADOS — AGRESSIVO ------------")
-    parts.append(read_text_safe(jogos_ag))
-    parts.append("\n------------ JOGOS GERADOS — CONSERVADOR ------------")
-    parts.append(read_text_safe(jogos_co))
+    # Jogos (TXT do wizard)
+    parts.append("------------ JOGOS GERADOS — AGRESSIVO ------------")
+    parts.append(_read_text_if_exists(Path(args.jogos_ag)))
+    parts.append("")
+    parts.append("------------ JOGOS GERADOS — CONSERVADOR ------------")
+    parts.append(_read_text_if_exists(Path(args.jogos_cons)))
+    parts.append("")
 
     out.write_text("\n".join(parts), encoding="utf-8")
-    print(f"OK: gerado {out}")
+    print(f"✅ Relatorio completo gerado: {out}")
 
 
 if __name__ == "__main__":
