@@ -22,6 +22,110 @@ jobs:
   rodar-wizard:
     runs-on: ubuntu-latest
     steps:
+
+      - name: Preparar outputs
+        run: |
+          mkdir -p outputs
+          touch outputs/.gitkeep
+      
+      - name: Definir timestamp
+        id: ts
+        run: |
+          echo "TS=$(date +'%d-%m-%Y_%Hh%Mmin')" >> $GITHUB_OUTPUT
+          echo "DATA=$(date +'%d-%m-%Y')" >> $GITHUB_OUTPUT
+          echo "Timestamp usado: $(date +'%d-%m-%Y_%Hh%Mmin')"
+      
+      # -----------------------------
+      # 1) GERAR JOGOS (TXT)
+      # -----------------------------
+      - name: Rodar Wizard - AGRESSIVO (gera TXT)
+        run: |
+          echo "Modo agressivo..."
+          python wizard_cli.py --modo agressivo --ultimos 20 --finais 5 \
+            | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
+      
+      - name: Rodar Wizard - CONSERVADOR (gera TXT)
+        run: |
+          echo "Modo conservador..."
+          python wizard_cli.py --modo conservador --ultimos 20 --finais 5 \
+            | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
+      
+      # -----------------------------
+      # 2) BACKTEST (CSV + TXT FORMATADO)
+      # -----------------------------
+      - name: Backtest - AGRESSIVO (CSV + TXT)
+        run: |
+          echo "Backtest agressivo..."
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --base "base/base_limpa.xlsx" \
+            --ultimos 200 \
+            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv"
+      
+          python scripts/formatar_backtest.py \
+            "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
+      
+      - name: Backtest - CONSERVADOR (CSV + TXT)
+        run: |
+          echo "Backtest conservador..."
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --base "base/base_limpa.xlsx" \
+            --ultimos 200 \
+            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv"
+      
+          python scripts/formatar_backtest.py \
+            "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt"
+      
+      # -----------------------------
+      # 3) DASHBOARD (PNG + CSV) - se você usa
+      # -----------------------------
+      - name: Gerar dashboard (PNG + CSV)
+        run: |
+          python scripts/dashboard.py
+      
+      # -----------------------------
+      # 4) RELATORIO MASTIGADO (TXT)
+      # -----------------------------
+      - name: Gerar relatorio mastigado (TXT)
+        run: |
+          python scripts/relatorio_mastigado.py \
+            --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
+            --data "${{ steps.ts.outputs.DATA }}"
+      
+      # -----------------------------
+      # 5) RELATORIO COMPLETO (TXT UNICO)
+      # -----------------------------
+      - name: Gerar relatorio completo (TXT)
+        run: |
+          python scripts/gerar_relatorio_completo.py \
+            --data "${{ steps.ts.outputs.DATA }}" \
+            --jogos-ag "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --jogos-cons "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-ag-txt "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-cons-txt "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --dash-resumo "outputs/dashboard_resumo_geral.csv" \
+            --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
+            --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
+      
+      # -----------------------------
+      # 6) COMMIT / PUSH
+      # -----------------------------
+      - name: Commit e push dos resultados
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add outputs
+          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + relatorios)" || echo "Nada para commitar"
+          git push
+
+
+
+
       - name: Checkout do repositório
         uses: actions/checkout@v3
 
