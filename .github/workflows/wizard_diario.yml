@@ -23,30 +23,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ 1) Checkout primeiro (sempre)
+      # 0) CHECKOUT PRIMEIRO (senão apaga o que você gerou antes)
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ✅ 2) Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # ✅ 3) Instalar dependências
       - name: Instalar dependencias
         run: |
           python -V
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # ✅ 4) Preparar outputs (depois do checkout, pra criar dentro do repo)
       - name: Preparar outputs
         run: |
           mkdir -p outputs
           touch outputs/.gitkeep
 
-      # ✅ 5) Definir timestamp (em horário BR)
       - name: Definir timestamp
         id: ts
         run: |
@@ -55,19 +51,19 @@ jobs:
           echo "Timestamp usado: $(TZ='America/Sao_Paulo' date +'%d-%m-%Y_%Hh%Mmin')"
 
       # -----------------------------
-      # (OPCIONAL, mas recomendado) Atualizar base / gerar bases
+      # 1) ATUALIZAR BASE / COMBINACOES
       # -----------------------------
-      - name: Atualizar base da Caixa (últimos 1000)
+      - name: Atualizar base da Caixa (ultimos 1000)
         run: python scripts/atualizar_base.py --ultimos 1000
 
       - name: Gerar base limpa
         run: python scripts/gerar_base_limpa.py
 
-      - name: Gerar combinações inteligentes
+      - name: Gerar combinacoes inteligentes
         run: python scripts/gerar_combinacoes.py
 
       # -----------------------------
-      # 1) GERAR JOGOS (TXT)
+      # 2) GERAR JOGOS (TXT)
       # -----------------------------
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
         env:
@@ -77,11 +73,7 @@ jobs:
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
             | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
-
-      - name: Criar atalho fixo - AGRESSIVO
-        run: |
-          ULTIMO=$(ls -t outputs/jogos_agressivo_*.txt | head -n 1)
-          cp "$ULTIMO" outputs/jogos_agressivo.txt
+          cp "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/jogos_agressivo.txt"
 
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
         env:
@@ -91,34 +83,25 @@ jobs:
           echo "Modo conservador..."
           python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
             | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
+          cp "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/jogos_conservador.txt"
 
-      - name: Criar atalho fixo - CONSERVADOR
+      - name: Debug - conferir se os 15 numeros aparecem nos TXT
         run: |
-          ULTIMO=$(ls -t outputs/jogos_conservador_*.txt | head -n 1)
-          cp "$ULTIMO" outputs/jogos_conservador.txt
+          echo "HEAD agressivo:"
+          head -n 80 outputs/jogos_agressivo.txt || true
+          echo "Procurando linha com 15 dezenas (agressivo)..."
+          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_agressivo.txt || true
+
+          echo "HEAD conservador:"
+          head -n 80 outputs/jogos_conservador.txt || true
+          echo "Procurando linha com 15 dezenas (conservador)..."
+          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_conservador.txt || true
 
       # -----------------------------
-      # DEBUG (opcional)
+      # 3) BACKTEST (CSV + TXT)
+      #   - backtest.py exige --csv-out
+      #   - TXT sai pelo stdout -> tee
       # -----------------------------
-      - name: Debug - listar arquivos
-        run: |
-          pwd
-          echo "Listando raiz:"
-          ls -la
-          echo "Listando scripts:"
-          ls -la scripts || true
-          echo "Listando outputs:"
-          ls -la outputs || true
-          echo "HEAD jogos agressivo:"
-          head -n 60 outputs/jogos_agressivo.txt || true
-          echo "HEAD jogos conservador:"
-          head -n 60 outputs/jogos_conservador.txt || true
-
-      # -----------------------------
-      # 2) BACKTEST (CSV + TXT)
-      #  ⚠️ CORREÇÃO PRINCIPAL: backtest.py exige --csv-out e --out
-      # -----------------------------
-      
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
           python scripts/backtest.py \
@@ -127,7 +110,7 @@ jobs:
             --ultimos 20 \
             --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
           | tee "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt"
-      
+
           cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_agressivo.csv"
           cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt"
 
@@ -144,29 +127,25 @@ jobs:
           cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt"
 
       # -----------------------------
-      # 3) DASHBOARD (PNG + CSV)
+      # 4) DASHBOARD (PNG + CSV)
       # -----------------------------
       - name: Gerar dashboard (PNG + CSV)
-        run: |
-          python scripts/dashboard.py
+        run: python scripts/dashboard.py
 
       # -----------------------------
-      # 4) RELATORIO MASTIGADO (TXT)
-      #  ⚠️ CORREÇÃO: faltava --out em alguns testes; aqui está completo
+      # 5) RELATORIO MASTIGADO (TXT)
+      #   (use os CSV fixos, mais simples e não quebra por timestamp)
       # -----------------------------
       - name: Gerar relatorio mastigado (TXT)
         run: |
           python scripts/relatorio_mastigado.py \
-            --agressivo   "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
-            --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
-            --out         "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
-            --data        "${{ steps.ts.outputs.DATA }}"
-
-          cp "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" "outputs/relatorio_mastigado.txt"
+            --agressivo "outputs/backtest_agressivo.csv" \
+            --conservador "outputs/backtest_conservador.csv" \
+            --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
+            --data "${{ steps.ts.outputs.DATA }}"
 
       # -----------------------------
-      # 5) RELATORIO COMPLETO (TXT UNICO)
-      #  ⚠️ CORREÇÃO: o arquivo é scripts/gerar_relatorio_completo.py (não relatorio_completo.py)
+      # 6) RELATORIO COMPLETO (TXT UNICO)
       # -----------------------------
       - name: Gerar relatorio completo (TXT)
         run: |
@@ -180,25 +159,13 @@ jobs:
             --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
             --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
 
-          cp "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt" "outputs/relatorio_completo.txt"
-
       # -----------------------------
-      # 6) COMMIT / PUSH
+      # 7) COMMIT / PUSH
       # -----------------------------
       - name: Commit e push dos resultados
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # garante outputs mesmo se estiver no .gitignore
-          git add -f outputs/ || true
-          git add -f base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
-          git add . || true
-
-          if git diff --cached --quiet; then
-            echo "Nenhuma mudança para enviar."
-            exit 0
-          fi
-
-          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + dashboard + relatorios)"
+          git add outputs base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
+          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + relatorios)" || echo "Nada para commitar"
           git push
