@@ -197,10 +197,11 @@ jobs:
           head -n 80 "outputs/jogos_agressivo_${DATA}.txt" || true
 
           python scripts/backtest.py \
-            --jogos-file "outputs/jogos_agressivo_${DATA}.txt" \
-            --ultimos 200 \
-            --csv-out "outputs/backtest_agressivo_${DATA}.csv"
-
+            --jogos-file "outputs/jogos_agressivo.txt" \
+            --base "base/base_limpa.xlsx" \
+            --ultimos 20 \
+            --csv-out "outputs/backtest_agressivo.csv" \
+            --out "outputs/backtest_agressivo.txt"
 
 
 
