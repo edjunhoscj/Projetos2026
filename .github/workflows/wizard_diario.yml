@@ -88,15 +88,23 @@ jobs:
 
           echo "Relatório mastigado (TXT)..."
           python scripts/relatorio_mastigado.py \
-            --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
-            --conservador "outputs/backtest_conservador_${DATA}.csv" \
-            --out "outputs/relatorio_mastigado_${DATA}.txt" \
-            --data "${DATA%%_*}"
+             --agressivo "outputs/backtest_agressivo_${DATA}.csv" \
+             --conservador "outputs/backtest_conservador_${DATA}.csv" \
+             --out "outputs/relatorio_mastigado_${DATA}.txt" \
+             --data "$(echo ${DATA} | cut -d_ -f1)"
+
 
           echo "Relatório completo (TXT)..."
           python scripts/gerar_relatorio_completo.py \
-            --data "${DATA}" \
-            --out "outputs/relatorio_completo_${DATA}.txt"
+            --jogos-ag "outputs/jogos_agressivo_${DATA}.txt" \
+            --jogos-cons "outputs/jogos_conservador_${DATA}.txt" \
+            --bt-ag-txt "outputs/backtest_agressivo_${DATA}.txt" \
+            --bt-cons-txt "outputs/backtest_conservador_${DATA}.txt" \
+            --dash-resumo "outputs/dashboard_resumo_geral.csv" \
+            --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
+            --out "outputs/relatorio_completo_${DATA}.txt" \
+            --data "$(echo ${DATA} | cut -d_ -f1)"
+
 
           echo "Checando arquivo agressivo..."
           test -s "outputs/jogos_agressivo_${DATA}.txt" || (echo "Arquivo vazio!" && exit 1)
