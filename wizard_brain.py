@@ -1,211 +1,179 @@
+# wizard_brain.py  (na raiz)
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, List, Tuple, Iterable
-
-import numpy as np
-import pandas as pd
+from typing import Iterable
 
 
-DEZENAS_POSSIVEIS = list(range(1, 26))
-COL_DEZENAS = [f"D{i}" for i in range(1, 16)]
+def _contar_altas_20_25(dezenas: list[int]) -> int:
+    return sum(1 for d in dezenas if 20 <= d <= 25)
 
 
-# =====================================================
-#  MODELO DE ESTATÍSTICAS USADO PELO WIZARD
-# =====================================================
+def _jaccard(a: set[int], b: set[int]) -> float:
+    inter = len(a & b)
+    uni = len(a | b)
+    return inter / uni if uni else 0.0
 
-@dataclass
-class EstatisticasWizard:
+
+def _perfil_modo(config) -> dict:
     """
-    Objeto-resumo com tudo que o Wizard precisa saber da base.
+    Define "personalidade" do modo pra evitar agressivo == conservador.
+    Ajuste fino aqui se quiser.
     """
-    # frequência absoluta de cada dezena na janela analisada
-    freq: Dict[int, int]
-
-    # dezenas mais quentes (acima do percentil 75)
-    quentes: List[int]
-
-    # dezenas mais frias (abaixo do percentil 25)
-    frias: List[int]
-
-    # probabilidade P(número | posição 1..15)
-    prob_posicao: Dict[int, Dict[int, float]]
-
-
-# =====================================================
-#  CÁLCULOS DE ESTATÍSTICA BÁSICA
-# =====================================================
-
-def _contar_frequencias(df: pd.DataFrame) -> Dict[int, int]:
-    """Conta quantas vezes cada dezena aparece nas colunas D1..D15."""
-    freq = {d: 0 for d in DEZENAS_POSSIVEIS}
-    for col in COL_DEZENAS:
-        contagem = df[col].value_counts()
-        for dezena, qtde in contagem.items():
-            d = int(dezena)
-            if d in freq:
-                freq[d] += int(qtde)
-    return freq
-
-
-def _calcular_quentes_frias(freq: Dict[int, int]) -> Tuple[List[int], List[int]]:
-    """
-    Define dezenas quentes e frias usando quartis (Q1 e Q3).
-    """
-    valores = np.array(list(freq.values()), dtype=float)
-
-    q1 = np.percentile(valores, 25)
-    q3 = np.percentile(valores, 75)
-
-    quentes = [d for d, f in freq.items() if f >= q3]
-    frias = [d for d, f in freq.items() if f <= q1]
-
-    # Só por segurança: ordena
-    quentes.sort()
-    frias.sort()
-
-    return quentes, frias
-
-
-def _probabilidade_por_posicao(df: pd.DataFrame) -> Dict[int, Dict[int, float]]:
-    """
-    Para cada posição (coluna D1..D15) calcula a probabilidade de
-    cada dezena aparecer naquela posição.
-    """
-    prob_posicao: Dict[int, Dict[int, float]] = {}
-
-    for idx, col in enumerate(COL_DEZENAS, start=1):
-        contagem = df[col].value_counts()
-        total = contagem.sum()
-        if total == 0:
-            prob_posicao[idx] = {d: 0.0 for d in DEZENAS_POSSIVEIS}
-            continue
-
-        probs_col = {}
-        for d in DEZENAS_POSSIVEIS:
-            probs_col[d] = float(contagem.get(d, 0)) / float(total)
-        prob_posicao[idx] = probs_col
-
-    return prob_posicao
-
-
-def detectar_quentes_frias(
-    base_df: pd.DataFrame,
-    janela: int | None = None,
-) -> EstatisticasWizard:
-    """
-    Recebe a base limpa completa e devolve um EstatisticasWizard.
-
-    - janela: se informado, usa apenas os últimos N concursos;
-      se None, usa a base inteira.
-    """
-    if janela is not None and janela > 0 and len(base_df) > janela:
-        df = base_df.tail(janela).reset_index(drop=True)
+    if config.modo == "agressivo":
+        return {
+            "w_freq": 1.00,          # peso de frequência
+            "w_quentes": 0.90,       # favorece quentes
+            "w_frias": 0.25,         # aceita algumas frias
+            "w_recencia": 0.60,      # penaliza repetição com últimos (mais leve)
+            "w_div": 2.20,           # diversidade entre jogos (alto!)
+            "w_cov": 2.10,           # cobertura do conjunto (alto!)
+            "max_jaccard": 0.62,     # limite de similaridade (mais tolerante)
+            "target_20_25": (4, 6),  # quer 4-6 dezenas 20..25 (tendência)
+        }
     else:
-        df = base_df.copy()
+        return {
+            "w_freq": 0.85,
+            "w_quentes": 0.55,
+            "w_frias": 0.45,         # conservador aceita mais equilíbrio
+            "w_recencia": 0.95,      # penaliza repetição com últimos (mais forte)
+            "w_div": 2.60,           # diversidade ainda maior
+            "w_cov": 2.30,
+            "max_jaccard": 0.56,     # mais exigente (menos jogos parecidos)
+            "target_20_25": (3, 5),
+        }
 
-    # garante que só trabalhamos com as colunas D1..D15
-    for col in COL_DEZENAS:
-        if col not in df.columns:
-            raise ValueError(f"Coluna '{col}' não encontrada na base limpa.")
-
-    freq = _contar_frequencias(df)
-    quentes, frias = _calcular_quentes_frias(freq)
-    prob_posicao = _probabilidade_por_posicao(df)
-
-    return EstatisticasWizard(
-        freq=freq,
-        quentes=quentes,
-        frias=frias,
-        prob_posicao=prob_posicao,
-    )
-
-
-# =====================================================
-#  (OPCIONAL) CLUSTERIZAÇÃO – VERSÃO LEVE
-# =====================================================
-
-def clusterizar_concursos(base_df: pd.DataFrame) -> None:
-    """
-    Placeholder de clusterização. Para não criar dependência de scikit-learn
-    no GitHub Actions, por enquanto não usamos cluster real.
-
-    Mantive a função para não quebrar imports no wizard_cli.py.
-    Quando quiser, dá pra trocar essa função por um KMeans de verdade.
-    """
-    return None
-
-
-# =====================================================
-#  SCORE INTELIGENTE DOS JOGOS
-# =====================================================
 
 def calcular_score_inteligente(
-    dezenas: Iterable[int],
+    dezenas: list[int],
     ultimos_tuplas: set[tuple[int, ...]],
-    cobertura_contagem: Dict[int, int],
-    quentes: List[int],
-    frias: List[int],
-    freq: Dict[int, int],   # alinhado com o wizard_cli
-    modelo_cluster,         # não usado por enquanto (placeholder)
-    config,                 # WizardConfig (tem modo, etc.)
-    escolhidos,   # <<< mantenha esse nome
+    cobertura_contagem: dict[int, int],
+    quentes: set[int],
+    frias: set[int],
+    freq: dict[int, int],
+    modelo_cluster,
+    config,
+    escolhidos: list[tuple[int, ...]],
 ) -> float:
     """
-    Versão "inteligente" do score, combinando:
-      - Cobertura (como antes)
-      - Bônus por dezenas quentes
-      - Pequeno bônus por usar algumas frias
-      - Penalização por parecer demais com concursos recentes
-      - Penalização por parecer demais com jogos já escolhidos
+    Score "de verdade" para evitar jogos viciados:
+      1) Frequência (histórica) + quentes/frias (com pesos por modo)
+      2) Penalização de repetição com concursos recentes (recência)
+      3) Diversidade ENTRE os jogos escolhidos (punir Jaccard alto e overlap alto)
+      4) Cobertura do CONJUNTO (recompensa trazer dezenas novas ao pool)
+      5) Tendência 20..25 como "soft target" (sem engessar)
     """
+    p = _perfil_modo(config)
 
-    dezenas = sorted(int(d) for d in dezenas)
-    dezenas_set = set(dezenas)
+    dezenas = sorted(dezenas)
+    s = set(dezenas)
 
-    # 1) Cobertura (igual ideia antiga)
-    cobertura_score = 0.0
-    for d in dezenas:
-        freq_usada = cobertura_contagem.get(d, 0)
-        cobertura_score += 1.0 / (1.0 + freq_usada)
+    # -----------------------------
+    # 1) Frequência + quentes/frias
+    # -----------------------------
+    # normaliza freq pela maior frequência observada (evita explodir score)
+    maxf = max(freq.values()) if freq else 1
+    freq_score = sum((freq.get(d, 0) / maxf) for d in dezenas) / 15.0
 
-    # 2) Bônus por dezenas quentes
-    qtde_quentes = sum(1 for d in dezenas if d in quentes)
-    bonus_quentes = qtde_quentes / 15.0  # entre 0 e 1
+    # quentes/frias
+    qtd_quentes = sum(1 for d in dezenas if d in quentes)
+    qtd_frias = sum(1 for d in dezenas if d in frias)
+    quentes_score = qtd_quentes / 15.0
+    frias_score = qtd_frias / 15.0
 
-    # 3) Pequeno bônus se usar algumas frias (diversificação)
-    qtde_frias = sum(1 for d in dezenas if d in frias)
-    bonus_frias = (qtde_frias / 15.0) * 0.3  # peso menor
+    score_base = (
+        p["w_freq"] * freq_score
+        + p["w_quentes"] * quentes_score
+        + p["w_frias"] * frias_score
+    )
 
-    # 4) Penalização por semelhança com concursos recentes
+    # -----------------------------
+    # 2) Penalização por recência
+    # -----------------------------
+    # quanto mais parecido com algum dos últimos concursos, pior (dependendo do modo)
     max_overlap_ultimos = 0
     for ult in ultimos_tuplas:
-        inter = len(dezenas_set.intersection(ult))
+        inter = len(s.intersection(ult))
         if inter > max_overlap_ultimos:
             max_overlap_ultimos = inter
 
-    if config.modo == "conservador":
-        penal_ultimos = max(0, max_overlap_ultimos - 10) * 0.8
+    # penaliza acima de um “limiar razoável”
+    # agressivo tolera mais repetição com últimos; conservador tolera menos
+    limiar = 11 if config.modo == "agressivo" else 10
+    recencia_pen = max(0, max_overlap_ultimos - limiar) * p["w_recencia"]
+
+    # -----------------------------
+    # 3) Diversidade entre jogos escolhidos
+    # -----------------------------
+    # ideia: se você já escolheu um jogo muito parecido, esse candidato cai muito no score
+    div_pen = 0.0
+    if escolhidos:
+        # união do que já foi escolhido
+        for j in escolhidos:
+            sj = set(j)
+            jac = _jaccard(s, sj)
+
+            # penalidade suave + "muro" se passar do limite de Jaccard
+            if jac > p["max_jaccard"]:
+                div_pen += (jac - p["max_jaccard"]) * 10.0  # cai forte
+
+            # também punir overlap absoluto (ex.: 12/15 iguais)
+            overlap = len(s & sj)
+            if overlap >= (10 if config.modo == "agressivo" else 9):
+                div_pen += (overlap - 9) * 0.8
+
+        div_pen *= p["w_div"]
+
+    # -----------------------------
+    # 4) Cobertura do conjunto (recompensa “trazer dezenas novas”)
+    # -----------------------------
+    cov_bonus = 0.0
+    if escolhidos:
+        ja = set()
+        for j in escolhidos:
+            ja |= set(j)
+
+        novas = len(s - ja)  # quantas dezenas novas esse jogo adiciona ao pool
+        # bônus cresce rápido no começo, depois suaviza
+        cov_bonus = (novas / 15.0) * p["w_cov"]
+
+        # extra: se o pool total está pequeno, incentiva ainda mais
+        # (evita 5 jogos quase iguais)
+        pool_atual = len(ja)
+        if pool_atual < (18 if config.modo == "agressivo" else 20):
+            cov_bonus += 0.35
+
     else:
-        # agressivo tolera mais repetição
-        penal_ultimos = max(0, max_overlap_ultimos - 12) * 0.5
+        # primeiro jogo: cobertura não existe ainda, então não mexe
+        cov_bonus = 0.0
 
-    # 5) Penalização por ficar muito parecido com jogos já escolhidos
-    max_overlap_escolhidos = 0
-    for jogo in escolhidos:
-        inter = len(dezenas_set.intersection(jogo))
-        if inter > max_overlap_escolhidos:
-            max_overlap_escolhidos = inter
-    penal_escolhidos = max(0, max_overlap_escolhidos - 10) * 0.7
+    # -----------------------------
+    # 5) Tendência 20..25 (soft target)
+    # -----------------------------
+    # Não força, mas melhora se ficar dentro do intervalo desejado
+    c2025 = _contar_altas_20_25(dezenas)
+    lo, hi = p["target_20_25"]
+    if c2025 < lo:
+        bonus_2025 = -0.30 * (lo - c2025)
+    elif c2025 > hi:
+        bonus_2025 = -0.20 * (c2025 - hi)
+    else:
+        bonus_2025 = +0.25
 
-    score = (
-        cobertura_score
-        + bonus_quentes
-        + bonus_frias
-        - penal_ultimos
-        - penal_escolhidos
-    )
+    # -----------------------------
+    # Cobertura de repetição interna (já existe no teu fluxo via cobertura_contagem)
+    # -----------------------------
+    # Isso ajuda a evitar “sempre as mesmas dezenas” dentro do conjunto
+    # (mantém, mas com peso menor para não dominar)
+    cov_interna = 0.0
+    for d in dezenas:
+        f = cobertura_contagem.get(d, 0)
+        cov_interna += 1.0 / (1.0 + f)
+    cov_interna = (cov_interna / 15.0) * 0.65
+
+    # -----------------------------
+    # Score final
+    # -----------------------------
+    score = score_base + cov_interna + cov_bonus + bonus_2025 - recencia_pen - div_pen
 
     return float(score)
