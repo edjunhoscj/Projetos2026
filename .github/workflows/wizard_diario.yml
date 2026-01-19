@@ -160,7 +160,11 @@ jobs:
       # -----------------------------
       - name: Gerar dashboard (PNG + CSV)
         run: |
-          python scripts/dashboard.py
+          python scripts/dashboard.py \
+            --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out-resumo "outputs/dashboard_resumo_geral.csv" \
+            --out-dist "outputs/dashboard_distribuicao_acertos.csv"
 
       # -----------------------------
       # 4) RELATORIO MASTIGADO (TXT)
