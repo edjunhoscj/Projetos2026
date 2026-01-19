@@ -1,279 +1,277 @@
 from __future__ import annotations
 
 import argparse
+import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Set, Tuple, Dict
 
-import numpy as np
 import pandas as pd
 
-from wizard_brain import (
-    detectar_quentes_frias,
-    clusterizar_concursos,
-    calcular_score_inteligente,
-)
 
-# =========================================
-#   CONFIGURAÇÃO DO WIZARD
-# =========================================
+# =========================
+# Utilitários
+# =========================
 
-@dataclass
-class WizardConfig:
-    modo: str               # "agressivo" ou "conservador"
-    ultimos: int            # quantos concursos recentes comparar
-    jogos_finais: int       # quantos jogos o wizard deve entregar
-    max_seq_run: int = 4    # máx. de dezenas consecutivas (ex.: 4 -> 01 02 03 04)
-    min_score: float = 0.0  # score mínimo para aceitar um jogo
-
-
-# =========================================
-#   FUNÇÕES AUXILIARES
-# =========================================
-
-def carregar_base(base_path: Path) -> pd.DataFrame:
+def load_base_last_n(base_path: Path, n: int) -> List[Set[int]]:
     if not base_path.exists():
-        raise FileNotFoundError(f"Base histórica não encontrada em: {base_path}")
+        raise FileNotFoundError(f"Base não encontrada: {base_path}")
 
     df = pd.read_excel(base_path)
+    if df.empty:
+        raise ValueError("Base vazia.")
 
-    # Garantir colunas principais
-    esperadas = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
-    faltando = [c for c in esperadas if c not in df.columns]
-    if faltando:
-        raise ValueError(f"Colunas faltando na base: {faltando}")
+    # tenta detectar 15 colunas de dezenas
+    # preferindo D1..D15 se existirem
+    prefer = [c for c in df.columns if str(c).strip().lower() in {f"d{i}" for i in range(1, 16)}]
+    if len(prefer) >= 15:
+        cols = prefer[:15]
+    else:
+        # fallback: pega as 15 primeiras colunas numéricas 1..25
+        numeric_cols = []
+        for c in df.columns:
+            s = pd.to_numeric(df[c], errors="coerce")
+            if s.notna().mean() < 0.6:
+                continue
+            vmin = s.min(skipna=True)
+            vmax = s.max(skipna=True)
+            if pd.notna(vmin) and pd.notna(vmax) and 1 <= vmin <= 25 and 1 <= vmax <= 25:
+                numeric_cols.append(c)
+        if len(numeric_cols) < 15:
+            raise ValueError("Não consegui detectar 15 colunas de dezenas na base.")
+        cols = numeric_cols[:15]
 
-    return df
+    df_tail = df.tail(int(n)).copy()
+
+    sorteios: List[Set[int]] = []
+    for _, row in df_tail.iterrows():
+        nums: List[int] = []
+        for c in cols:
+            v = row.get(c)
+            try:
+                nn = int(v)
+            except Exception:
+                continue
+            if 1 <= nn <= 25:
+                nums.append(nn)
+        if len(nums) >= 15:
+            sorteios.append(set(nums[:15]))
+
+    if not sorteios:
+        raise ValueError("Não consegui extrair sorteios (15 dezenas) da base.")
+    return sorteios
 
 
-def pegar_ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
-    # Ordena por Concurso se existir, senão usa ordem natural
-    if "Concurso" in df.columns:
-        df = df.sort_values("Concurso")
-    return df.tail(n).reset_index(drop=True)
+def freq_from_draws(draws: List[Set[int]]) -> Dict[int, int]:
+    freq = {i: 0 for i in range(1, 26)}
+    for s in draws:
+        for d in s:
+            if 1 <= d <= 25:
+                freq[d] += 1
+    return freq
 
 
-def respeita_sequencia_maxima(dezenas: list[int], max_seq_run: int) -> bool:
-    """
-    Verifica se não há mais do que `max_seq_run` dezenas consecutivas.
-    Ex.: [1,2,3,4,7,...] com max_seq_run=4 OK; se tivesse 1..5 -> quebra.
-    """
-    dezenas = sorted(dezenas)
-    run = 1
-    for i in range(1, len(dezenas)):
-        if dezenas[i] == dezenas[i - 1] + 1:
-            run += 1
-            if run > max_seq_run:
-                return False
+def odd_count(game: Set[int]) -> int:
+    return sum(1 for x in game if x % 2 == 1)
+
+
+def sum_game(game: Set[int]) -> int:
+    return sum(game)
+
+
+def max_consecutive_run(nums_sorted: List[int]) -> int:
+    best = 1
+    cur = 1
+    for i in range(1, len(nums_sorted)):
+        if nums_sorted[i] == nums_sorted[i-1] + 1:
+            cur += 1
+            best = max(best, cur)
         else:
-            run = 1
+            cur = 1
+    return best
+
+
+def bucket_counts(game: Set[int]) -> Tuple[int, int, int]:
+    # 1-8, 9-17, 18-25
+    a = sum(1 for x in game if 1 <= x <= 8)
+    b = sum(1 for x in game if 9 <= x <= 17)
+    c = sum(1 for x in game if 18 <= x <= 25)
+    return a, b, c
+
+
+@dataclass
+class Constraints:
+    odd_min: int
+    odd_max: int
+    sum_min: int
+    sum_max: int
+    max_seq: int
+    bucket_min: int
+    bucket_max: int
+
+
+def passes_constraints(game: Set[int], cons: Constraints) -> bool:
+    if len(game) != 15:
+        return False
+
+    o = odd_count(game)
+    if not (cons.odd_min <= o <= cons.odd_max):
+        return False
+
+    s = sum_game(game)
+    if not (cons.sum_min <= s <= cons.sum_max):
+        return False
+
+    ns = sorted(game)
+    if max_consecutive_run(ns) > cons.max_seq:
+        return False
+
+    a, b, c = bucket_counts(game)
+    if not (cons.bucket_min <= a <= cons.bucket_max):
+        return False
+    if not (cons.bucket_min <= b <= cons.bucket_max):
+        return False
+    if not (cons.bucket_min <= c <= cons.bucket_max):
+        return False
+
     return True
 
 
-# =========================================
-#   ESCOLHA DE JOGOS A PARTIR DE COMBINAÇÕES
-# =========================================
-
-def escolher_jogos(
-    comb_path: Path,
-    ultimos_df: pd.DataFrame,
-    config: WizardConfig,
-    freq: dict[int, int],
-    quentes: set[int],
-    frias: set[int],
-    modelo_cluster,
-) -> list[tuple[int, ...]]:
+def score_game(game: Set[int], freq: Dict[int, int], modo: str) -> float:
     """
-    Lê combinacoes/combinacoes_inteligentes.csv em chunks e escolhe jogos
-    conforme o modo (agressivo/conservador), priorizando:
-
-    - evitar repetir demais os últimos concursos
-    - boa cobertura de dezenas
-    - respeitar limite de sequência de números consecutivos
-    - usar estatísticas de quentes/frias e clusterização
+    Score simples:
+      - agressivo: favorece dezenas quentes (frequência alta)
+      - conservador: favorece equilíbrio (penaliza extremos)
     """
+    fsum = sum(freq[d] for d in game)
 
-    modo = config.modo
-    jogos_finais = config.jogos_finais
-    max_seq_run = config.max_seq_run
-    min_score = config.min_score
+    if modo == "agressivo":
+        # quanto mais "quente", melhor
+        return float(fsum)
 
-    print(f"🔍 Lendo combinações de: {comb_path}")
-    print(f"Modo: {modo} | Jogos finais desejados: {jogos_finais}")
-
-    if not comb_path.exists():
-        raise FileNotFoundError(f"Arquivo de combinações não encontrado: {comb_path}")
-
-    escolhidos: list[tuple[int, ...]] = []
-
-    # Set com tuplas dos últimos concursos para evitar repetição exata
-    ultimos_tuplas: set[tuple[int, ...]] = set()
-    for _, linha in ultimos_df.iterrows():
-        dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
-        ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
-
-    # Cobertura: contagem de frequência das dezenas nos escolhidos até agora
-    cobertura_contagem: dict[int, int] = {d: 0 for d in range(1, 26)}
-
-    chunk_size = 20_000
-    reader = pd.read_csv(comb_path, header=None, chunksize=chunk_size)
-
-    for chunk_idx, chunk in enumerate(reader, start=1):
-        print(f"  -> Processando chunk {chunk_idx} ({len(chunk)} linhas)")
-
-        for _, row in chunk.iterrows():
-            # Cada row tem UMA coluna: a string "01 02 03 ... 15"
-            jogo_str = str(row.iloc[0]).strip()
-
-            if not jogo_str:
-                continue
-
-            try:
-                dezenas = [int(x) for x in jogo_str.split()]
-            except ValueError:
-                # Linha malformada, pula
-                continue
-
-            if len(dezenas) != 15:
-                # Também não é um jogo válido
-                continue
-
-            dezenas = sorted(dezenas)
-            jogo_tupla = tuple(dezenas)
-
-            # 1) Não repetir exatamente jogos recentes
-            if jogo_tupla in ultimos_tuplas:
-                continue
-
-            # 2) Checar sequência máxima de números consecutivos
-            if not respeita_sequencia_maxima(dezenas, max_seq_run):
-                continue
-
-            # 3) Score inteligente (cobertura + quentes/frias + cluster etc.)
-            score = calcular_score_inteligente(
-                dezenas=dezenas,
-                ultimos_tuplas=ultimos_tuplas,
-                cobertura_contagem=cobertura_contagem,
-                quentes=quentes,
-                frias=frias,
-                freq=freq,
-                modelo_cluster=modelo_cluster,
-                config=config,
-                escolhidos=escolhidos,
-            )
-
-            if score < min_score:
-                continue
-
-            # 4) Atualiza cobertura
-            for d in dezenas:
-                cobertura_contagem[d] += 1
-
-            escolhidos.append(jogo_tupla)
-
-            # Critério de parada: atingimos os jogos finais desejados
-            if len(escolhidos) >= jogos_finais:
-                print("✅ Quantidade de jogos finais atingida.")
-                return escolhidos
-
-    print("⚠️ Atenção: fim do arquivo de combinações, "
-          f"mas só conseguimos {len(escolhidos)} jogos.")
-    return escolhidos
+    # conservador:
+    # penaliza concentração em dezenas muito quentes e muito frias
+    freqs = sorted(freq[d] for d in game)
+    # spread (variação)
+    spread = freqs[-1] - freqs[0]
+    # penaliza spread grande e prioriza um fsum decente
+    return float(fsum) - 0.6 * float(spread)
 
 
-# =========================================
-#   IMPRESSÃO / RESUMO FINAL
-# =========================================
-
-def imprimir_resumo(jogos: list[tuple[int, ...]], config: WizardConfig) -> None:
-    print("\n========================================")
-    print("        JOGOS GERADOS PELO WIZARD       ")
-    print("========================================")
-    print(f"Modo: {config.modo}")
-    print(f"Jogos finais: {len(jogos)}\n")
-
-    for idx, jogo in enumerate(jogos, start=1):
-        seq = " ".join(f"{d:02d}" for d in jogo)
-        print(f"Jogo {idx:02d}: {seq}")
-
-    print("\nBoa sorte! 🍀")
+def jaccard(a: Set[int], b: Set[int]) -> float:
+    return len(a & b) / len(a | b)
 
 
-# =========================================
-#   FUNÇÃO PRINCIPAL (CLI)
-# =========================================
+def diversify(top: List[Tuple[float, Set[int]]], finais: int, max_sim: float) -> List[Set[int]]:
+    chosen: List[Set[int]] = []
+    for _, g in top:
+        if len(chosen) >= finais:
+            break
+        ok = True
+        for c in chosen:
+            if jaccard(g, c) >= max_sim:
+                ok = False
+                break
+        if ok:
+            chosen.append(g)
+    return chosen
+
+
+# =========================
+# CLI
+# =========================
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Wizard Lotofácil - gera jogos filtrando combinações."
-    )
-    parser.add_argument(
-        "--modo",
-        choices=["agressivo", "conservador"],
-        default="conservador",
-        help="Modo de jogo (default: conservador)",
-    )
-    parser.add_argument(
-        "--ultimos",
-        type=int,
-        default=20,
-        help="Quantidade de concursos recentes para comparação (default: 20)",
-    )
-    parser.add_argument(
-        "--finais",
-        type=int,
-        default=5,
-        help="Quantidade de jogos finais desejados (default: 5)",
-    )
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--modo", choices=["agressivo", "conservador"], required=True)
+    ap.add_argument("--ultimos", type=int, default=20)
+    ap.add_argument("--finais", type=int, default=5)
+    ap.add_argument("--base", default="base/base_limpa.xlsx")
+    ap.add_argument("--candidatos", type=int, default=80000, help="Qtde de jogos candidatos (amostragem)")
+    ap.add_argument("--seed", type=int, default=0, help="Seed (0 = aleatória)")
+    ap.add_argument("--max-sim", type=float, default=0.75, help="Similaridade máxima (diversidade)")
+    args = ap.parse_args()
 
-    args = parser.parse_args()
+    base_path = Path(args.base)
 
-    base_path = Path("base/base_limpa.xlsx")
-    # usa as combinações inteligentes
-    comb_path = Path("combinacoes/combinacoes_inteligentes.csv")
+    if args.seed and args.seed != 0:
+        random.seed(args.seed)
 
-    config = WizardConfig(
-        modo=args.modo,
-        ultimos=args.ultimos,
-        jogos_finais=args.finais,
-        max_seq_run=4,
-        min_score=0.0,   # se quiser filtrar mais forte, aumentar esse valor
-    )
+    draws = load_base_last_n(base_path, args.ultimos)
+    freq = freq_from_draws(draws)
 
-    print("========================================")
-    print("     WIZARD LOTOFÁCIL - CLI")
-    print("========================================")
+    # constraints por modo
+    if args.modo == "agressivo":
+        cons = Constraints(
+            odd_min=6, odd_max=10,
+            sum_min=150, sum_max=235,
+            max_seq=5,
+            bucket_min=3, bucket_max=7,
+        )
+    else:
+        cons = Constraints(
+            odd_min=7, odd_max=9,
+            sum_min=165, sum_max=220,
+            max_seq=4,
+            bucket_min=4, bucket_max=6,
+        )
+
+    print("=" * 46)
+    print("WIZARD LOTOFÁCIL - CLI")
+    print("=" * 46)
     print(f"Base histórica: {base_path}")
-    print(f"Combinações:    {comb_path}")
-    print(f"Modo:           {config.modo}")
-    print(f"Últimos:        {config.ultimos} concursos")
-    print(f"Jogos finais:   {config.jogos_finais}")
-    print("========================================\n")
+    print(f"Modo: {args.modo}")
+    print(f"Últimos: {args.ultimos} concursos")
+    print(f"Jogos finais desejados: {args.finais}")
+    print(f"Candidatos (amostragem): {args.candidatos}")
+    print("=" * 46)
+    print("")
 
-    # 1) Carrega base e pega últimos concursos
-    base_df = carregar_base(base_path)
-    ultimos_df = pegar_ultimos_concursos(base_df, config.ultimos)
+    # gera candidatos
+    cand: List[Tuple[float, Set[int]]] = []
+    tries = 0
+    max_tries = max(args.candidatos * 5, 200000)
 
-    # 2) Estatísticas quentes/frias + modelo de clusters
-    estat = detectar_quentes_frias(base_df)
-    freq = estat.freq
-    quentes = estat.quentes
-    frias = estat.frias
+    while len(cand) < args.candidatos and tries < max_tries:
+        tries += 1
+        g = set(random.sample(range(1, 26), 15))
+        if not passes_constraints(g, cons):
+            continue
+        sc = score_game(g, freq, args.modo)
+        cand.append((sc, g))
 
-    modelo_cluster = clusterizar_concursos(base_df)
+    if not cand:
+        print("⚠️ Atenção: não consegui gerar candidatos com as restrições atuais.")
+        print("Jogos finais: 0")
+        return
 
-    # 3) Escolhe jogos
-    jogos = escolher_jogos(
-        comb_path,
-        ultimos_df,
-        config,
-        freq,
-        quentes,
-        frias,
-        modelo_cluster,
-    )
+    cand.sort(key=lambda x: x[0], reverse=True)
 
-    # 4) Imprime resumo
-    imprimir_resumo(jogos, config)
+    # pega um top maior e depois diversifica
+    top_pool = cand[: max(args.finais * 80, 400)]
+    chosen = diversify(top_pool, args.finais, args.max_sim)
+
+    if len(chosen) < args.finais:
+        # fallback: completa sem diversidade (não falha)
+        for _, g in top_pool:
+            if len(chosen) >= args.finais:
+                break
+            if g not in chosen:
+                chosen.append(g)
+
+    print("=" * 46)
+    print("JOGOS GERADOS PELO WIZARD")
+    print("=" * 46)
+    print(f"Modo: {args.modo}")
+    print(f"Jogos finais: {len(chosen)}")
+    print("")
+
+    for i, g in enumerate(chosen, start=1):
+        nums = " ".join(f"{x:02d}" for x in sorted(g))
+        print(f"Jogo {i:02d}: {nums}")
+
+    print("")
+    print("Boa sorte! 🍀")
 
 
 if __name__ == "__main__":
