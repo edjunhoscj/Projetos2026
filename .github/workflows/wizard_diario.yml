@@ -23,11 +23,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 0) CHECKOUT (com LFS) PRIMEIRO
-      - name: Checkout (com Git LFS)
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          lfs: true
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -37,6 +34,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -V
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Preparar outputs
@@ -44,114 +42,117 @@ jobs:
           mkdir -p outputs
           touch outputs/.gitkeep
 
-      - name: Definir timestamp (Brasil)
+      - name: Definir timestamp (America/Sao_Paulo)
         id: ts
         run: |
-          echo "TS=$(TZ='America/Sao_Paulo' date +'%d-%m-%Y_%Hh%Mmin')" >> $GITHUB_OUTPUT
-          echo "DATA=$(TZ='America/Sao_Paulo' date +'%d-%m-%Y')" >> $GITHUB_OUTPUT
-          echo "Timestamp usado: $(TZ='America/Sao_Paulo' date +'%d-%m-%Y_%Hh%Mmin')"
+          TS=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y_%Hh%Mmin')
+          DATA=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y')
+          echo "TS=$TS" >> $GITHUB_OUTPUT
+          echo "DATA=$DATA" >> $GITHUB_OUTPUT
+          echo "Timestamp usado: $TS"
+          echo "Data usada: $DATA"
 
-      # 1) ATUALIZAR BASE / GERAR COMBINAÇÕES
+      - name: Definir inputs (ultimos/finais)
+        run: |
+          ULTIMOS="${{ github.event.inputs.ultimos || '20' }}"
+          FINAIS="${{ github.event.inputs.finais || '5' }}"
+          echo "ULTIMOS=$ULTIMOS" >> $GITHUB_ENV
+          echo "FINAIS=$FINAIS" >> $GITHUB_ENV
+          echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS"
+
+      # -----------------------------
+      # 0) (Opcional) Atualizar base / gerar insumos
+      # -----------------------------
       - name: Atualizar base da Caixa (últimos 1000)
         run: python scripts/atualizar_base.py --ultimos 1000
 
       - name: Gerar base limpa
         run: python scripts/gerar_base_limpa.py
 
-      - name: Gerar combinacoes inteligentes
+      - name: Gerar combinações inteligentes
         run: python scripts/gerar_combinacoes.py
 
-      # 2) VALIDACOES IMPORTANTES (pega o seu erro de “3 linhas”)
-      - name: Debug - checar arquivos críticos
-        run: |
-          echo "PWD:" && pwd
-          echo "Listando combinacoes/:" && ls -la combinacoes || true
-          echo "Listando base/:" && ls -la base || true
-
-          echo "Linhas do CSV de combinacoes:"
-          wc -l combinacoes/combinacoes_inteligentes.csv || true
-
-          echo "Primeiras linhas do CSV (para detectar LFS pointer):"
-          head -n 5 combinacoes/combinacoes_inteligentes.csv || true
-
-          # Falha se for ponteiro do Git LFS
-          if head -n 1 combinacoes/combinacoes_inteligentes.csv | grep -q "git-lfs.github.com"; then
-            echo "ERRO: combinacoes_inteligentes.csv está como ponteiro do Git LFS (conteúdo não foi baixado)."
-            echo "Solução: manter checkout com lfs:true (já está) e garantir que o arquivo foi gerado/commitado corretamente."
-            exit 1
-          fi
-
-          # Falha se estiver pequeno demais (ajuste o limite se quiser)
-          SIZE=$(wc -c < combinacoes/combinacoes_inteligentes.csv)
-          echo "Tamanho combinacoes_inteligentes.csv: $SIZE bytes"
-          if [ "$SIZE" -lt 50000 ]; then
-            echo "ERRO: combinacoes_inteligentes.csv está pequeno demais (provavelmente não foi gerado corretamente)."
-            exit 1
-          fi
-
-      # 3) GERAR JOGOS (TXT)
+      # -----------------------------
+      # 1) GERAR JOGOS (TXT)
+      # -----------------------------
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           echo "Modo agressivo..."
-          python wizard_cli.py --modo agressivo --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
+          python wizard_cli.py --modo agressivo --ultimos "$ULTIMOS" --finais "$FINAIS" \
             | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
-          cp "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" outputs/jogos_agressivo.txt
+
+      - name: Criar atalho fixo - AGRESSIVO
+        run: |
+          ULTIMO=$(ls -t outputs/jogos_agressivo_*.txt | head -n 1)
+          cp "$ULTIMO" outputs/jogos_agressivo.txt
+          echo "Atalho agressivo -> $ULTIMO"
 
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
-          FINAIS:  ${{ github.event.inputs.finais  || '5'  }}
         run: |
           echo "Modo conservador..."
-          python wizard_cli.py --modo conservador --ultimos "${ULTIMOS}" --finais "${FINAIS}" \
+          python wizard_cli.py --modo conservador --ultimos "$ULTIMOS" --finais "$FINAIS" \
             | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
-          cp "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" outputs/jogos_conservador.txt
 
-      # 4) VALIDAR SE REALMENTE GEROU 15 DEZENAS
+      - name: Criar atalho fixo - CONSERVADOR
+        run: |
+          ULTIMO=$(ls -t outputs/jogos_conservador_*.txt | head -n 1)
+          cp "$ULTIMO" outputs/jogos_conservador.txt
+          echo "Atalho conservador -> $ULTIMO"
+
       - name: Validar TXT de jogos (garante 15 dezenas)
         run: |
-          echo "Checando agressivo..."
-          test -s outputs/jogos_agressivo.txt || (echo "Arquivo agressivo vazio!" && exit 1)
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_agressivo.txt >/dev/null \
-            || (echo "Nao achei linha com 15 dezenas no agressivo" && echo "---- HEAD ----" && head -n 120 outputs/jogos_agressivo.txt && exit 1)
+          set -e
+          echo "Validando outputs/jogos_agressivo.txt"
+          test -s "outputs/jogos_agressivo.txt"
+          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_agressivo.txt" >/dev/null \
+            || (echo "Nao achei 15 dezenas no txt agressivo" && echo "---- HEAD ----" && head -n 120 "outputs/jogos_agressivo.txt" && exit 1)
 
-          echo "Checando conservador..."
-          test -s outputs/jogos_conservador.txt || (echo "Arquivo conservador vazio!" && exit 1)
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" outputs/jogos_conservador.txt >/dev/null \
-            || (echo "Nao achei linha com 15 dezenas no conservador" && echo "---- HEAD ----" && head -n 120 outputs/jogos_conservador.txt && exit 1)
+          echo "Validando outputs/jogos_conservador.txt"
+          test -s "outputs/jogos_conservador.txt"
+          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_conservador.txt" >/dev/null \
+            || (echo "Nao achei 15 dezenas no txt conservador" && echo "---- HEAD ----" && head -n 120 "outputs/jogos_conservador.txt" && exit 1)
 
-      # 5) BACKTEST (CSV) — ajuste nos argumentos: é --csv-out (não use --out aqui)
-      - name: Backtest - AGRESSIVO (CSV)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
+          echo "OK: ambos TXT tem pelo menos 1 linha com 15 dezenas."
+
+      # -----------------------------
+      # 2) BACKTEST (CSV + TXT)
+      # -----------------------------
+      - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_agressivo.txt" \
             --base "base/base_limpa.xlsx" \
-            --ultimos "${ULTIMOS}" \
-            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv"
-          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" outputs/backtest_agressivo.csv
+            --ultimos "$ULTIMOS" \
+            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --titulo "BACKTEST — MODO AGRESSIVO"
 
-      - name: Backtest - CONSERVADOR (CSV)
-        env:
-          ULTIMOS: ${{ github.event.inputs.ultimos || '20' }}
+          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_agressivo.csv" || true
+          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt" || true
+
+      - name: Backtest - CONSERVADOR (CSV + TXT)
         run: |
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_conservador.txt" \
             --base "base/base_limpa.xlsx" \
-            --ultimos "${ULTIMOS}" \
-            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv"
-          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" outputs/backtest_conservador.csv
+            --ultimos "$ULTIMOS" \
+            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --titulo "BACKTEST — MODO CONSERVADOR"
 
-      # 6) DASHBOARD (gera CSVs que entram no relatório completo)
+          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_conservador.csv" || true
+          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt" || true
+
+      # -----------------------------
+      # 3) DASHBOARD (PNG + CSV)
+      # -----------------------------
       - name: Gerar dashboard (PNG + CSV)
         run: |
           python scripts/dashboard.py
 
-      # 7) RELATORIO MASTIGADO (TXT) — aqui precisa --out (seu erro foi esse)
+      # -----------------------------
+      # 4) RELATORIO MASTIGADO (TXT)
+      # -----------------------------
       - name: Gerar relatorio mastigado (TXT)
         run: |
           python scripts/relatorio_mastigado.py \
@@ -160,32 +161,28 @@ jobs:
             --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
             --data "${{ steps.ts.outputs.DATA }}"
 
-      # 8) RELATORIO COMPLETO (TXT UNICO)
+      # -----------------------------
+      # 5) RELATORIO COMPLETO (TXT UNICO)
+      # -----------------------------
       - name: Gerar relatorio completo (TXT)
         run: |
           python scripts/gerar_relatorio_completo.py \
             --data "${{ steps.ts.outputs.DATA }}" \
             --jogos-ag "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
             --jogos-cons "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
-            --bt-ag-csv "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
-            --bt-cons-csv "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --bt-ag-txt "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-cons-txt "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
             --dash-resumo "outputs/dashboard_resumo_geral.csv" \
             --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
             --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
 
-      # 9) COMMIT / PUSH
+      # -----------------------------
+      # 6) COMMIT / PUSH
+      # -----------------------------
       - name: Commit e push dos resultados
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add -f outputs/ || true
-          git add -f base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
-
-          if git diff --cached --quiet; then
-            echo "Nenhuma mudança para enviar."
-            exit 0
-          fi
-
-          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + dashboard + relatorios)"
+          git add -f outputs base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
+          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + dashboard + relatorios)" || echo "Nada para commitar"
           git push
