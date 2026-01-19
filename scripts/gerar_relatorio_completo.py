@@ -1,79 +1,84 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
-def _agora_sp() -> str:
-    return datetime.now().strftime("%d-%m-%Y")
-
-
-def _read_text_if_exists(path: Path, max_lines: int | None = None) -> str:
+def _read_text(p: Optional[str]) -> str:
+    if not p:
+        return ""
+    path = Path(p)
     if not path.exists():
-        return f"[NAO ENCONTRADO] {path}"
+        return f"[AVISO] Arquivo não encontrado: {p}\n"
     txt = path.read_text(encoding="utf-8", errors="ignore")
-    if max_lines is not None:
-        lines = txt.splitlines()[:max_lines]
-        return "\n".join(lines)
+    # Detecta ponteiro de Git LFS
+    if txt.strip().startswith("version https://git-lfs.github.com/spec/v1"):
+        return (
+            "[AVISO] Este arquivo parece ser um ponteiro do Git LFS (não foi baixado no Actions).\n"
+            "        Solução: habilitar checkout com LFS (git lfs) ou remover LFS desses CSV/PNG.\n\n"
+            + txt
+        )
     return txt
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Gera um TXT unico com tudo do dia (jogos + backtests + dashboards).")
-    parser.add_argument("--data", required=False, help="DD-MM-YYYY (apenas para o cabecalho)")
-    parser.add_argument("--jogos-ag", required=True, help="TXT jogos agressivo do dia")
-    parser.add_argument("--jogos-cons", required=True, help="TXT jogos conservador do dia")
-    parser.add_argument("--bt-ag-txt", required=False, help="TXT backtest agressivo (opcional)")
-    parser.add_argument("--bt-cons-txt", required=False, help="TXT backtest conservador (opcional)")
-    parser.add_argument("--dash-resumo", required=False, help="CSV resumo geral (opcional)")
-    parser.add_argument("--dash-dist", required=False, help="CSV distribuicao acertos (opcional)")
-    parser.add_argument("--out", required=False, help="Arquivo final TXT (opcional)")
-    args = parser.parse_args()
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Gera um relatório completo (TXT único) do Wizard Lotofácil")
+    p.add_argument("--data", required=False, help="Data DD-MM-AAAA (opcional)")
 
-    data = args.data or _agora_sp()
-    out = Path(args.out) if args.out else Path("outputs") / f"relatorio_completo_{data}.txt"
-    out.parent.mkdir(parents=True, exist_ok=True)
+    p.add_argument("--jogos-ag", required=True, help="TXT de jogos agressivo (com timestamp)")
+    p.add_argument("--jogos-cons", required=True, help="TXT de jogos conservador (com timestamp)")
+
+    p.add_argument("--bt-ag-txt", required=False, help="TXT formatado do backtest agressivo")
+    p.add_argument("--bt-cons-txt", required=False, help="TXT formatado do backtest conservador")
+
+    p.add_argument("--dash-resumo", required=False, help="CSV do dashboard resumo geral")
+    p.add_argument("--dash-dist", required=False, help="CSV do dashboard distribuição de acertos")
+
+    p.add_argument("--out", required=False, default="outputs/relatorio_completo.txt", help="Saída TXT")
+    return p
+
+
+def main() -> None:
+    args = build_parser().parse_args()
+
+    data = args.data or ""
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
     parts = []
-    parts.append("=" * 46)
-    parts.append("        RELATORIO COMPLETO DO WIZARD")
-    parts.append(f"        DATA: {data}")
-    parts.append("=" * 46)
-    parts.append("")
+    parts.append("==============================================\n"
+                 "        RELATÓRIO COMPLETO DO WIZARD\n"
+                 f"        DATA: {data}\n"
+                 "==============================================\n\n")
 
-    # Backtests (TXT já formatado)
-    if args.bt_ag_txt:
-        parts.append("------------ BACKTEST — MODO AGRESSIVO ------------")
-        parts.append(_read_text_if_exists(Path(args.bt_ag_txt)))
-        parts.append("")
+    parts.append("------------ BACKTEST — MODO AGRESSIVO ------------\n")
+    parts.append(_read_text(args.bt_ag_txt) + "\n\n")
 
-    if args.bt_cons_txt:
-        parts.append("------------ BACKTEST — MODO CONSERVADOR ------------")
-        parts.append(_read_text_if_exists(Path(args.bt_cons_txt)))
-        parts.append("")
+    parts.append("------------ BACKTEST — MODO CONSERVADOR ------------\n")
+    parts.append(_read_text(args.bt_cons_txt) + "\n\n")
 
-    # Dashboards CSV (coloca “mastigado” no txt)
-    if args.dash_resumo:
-        parts.append("------------ DASHBOARD — RESUMO GERAL (CSV) ------------")
-        parts.append(_read_text_if_exists(Path(args.dash_resumo), max_lines=200))
-        parts.append("")
+    parts.append("------------ DISTRIBUIÇÃO DE ACERTOS ------------\n")
+    parts.append(_read_text(args.dash_dist) + "\n\n")
 
-    if args.dash_dist:
-        parts.append("------------ DASHBOARD — DISTRIBUICAO DE ACERTOS (CSV) ------------")
-        parts.append(_read_text_if_exists(Path(args.dash_dist), max_lines=200))
-        parts.append("")
+    parts.append("------------ JOGOS GERADOS — AGRESSIVO ------------\n")
+    parts.append(_read_text(args.jogos_ag) + "\n\n")
 
-    # Jogos (TXT do wizard)
-    parts.append("------------ JOGOS GERADOS — AGRESSIVO ------------")
-    parts.append(_read_text_if_exists(Path(args.jogos_ag)))
-    parts.append("")
-    parts.append("------------ JOGOS GERADOS — CONSERVADOR ------------")
-    parts.append(_read_text_if_exists(Path(args.jogos_cons)))
-    parts.append("")
+    parts.append("------------ JOGOS GERADOS — CONSERVADOR ------------\n")
+    parts.append(_read_text(args.jogos_cons) + "\n\n")
 
-    out.write_text("\n".join(parts), encoding="utf-8")
-    print(f"✅ Relatorio completo gerado: {out}")
+    # Interpretação simples do melhor do dia (se tiver backtest txt legível)
+    parts.append("============ RECOMENDAÇÃO FINAL ============\n")
+    parts.append("✔ Use o melhor jogo do agressivo para explosão\n")
+    parts.append("✔ Combine com o mais estável do conservador\n")
+    parts.append("✔ Para apostar só 1 jogo: use o melhor agressivo\n")
+    parts.append("✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio\n\n")
+
+    out_path.write_text("".join(parts), encoding="utf-8")
+    print(f"OK: gerou {out_path}")
 
 
 if __name__ == "__main__":
