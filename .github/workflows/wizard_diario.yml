@@ -69,6 +69,10 @@ jobs:
       - name: Gerar base limpa
         run: python scripts/gerar_base_limpa.py
 
+      - name: Analisar base (padrões)
+        run: |
+          python scripts/analise_base.py --base base/base_limpa.xlsx --ultimos 200 > outputs/analise_base.txt
+
       - name: Gerar combinações inteligentes
         run: python scripts/gerar_combinacoes.py
 
