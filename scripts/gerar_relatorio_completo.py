@@ -1,84 +1,71 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import Optional
 
 
-def _read_text(p: Optional[str]) -> str:
-    if not p:
+def _read_optional(path: str | None) -> str:
+    if not path:
         return ""
-    path = Path(p)
-    if not path.exists():
-        return f"[AVISO] Arquivo não encontrado: {p}\n"
-    txt = path.read_text(encoding="utf-8", errors="ignore")
-    # Detecta ponteiro de Git LFS
-    if txt.strip().startswith("version https://git-lfs.github.com/spec/v1"):
-        return (
-            "[AVISO] Este arquivo parece ser um ponteiro do Git LFS (não foi baixado no Actions).\n"
-            "        Solução: habilitar checkout com LFS (git lfs) ou remover LFS desses CSV/PNG.\n\n"
-            + txt
-        )
-    return txt
-
-
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Gera um relatório completo (TXT único) do Wizard Lotofácil")
-    p.add_argument("--data", required=False, help="Data DD-MM-AAAA (opcional)")
-
-    p.add_argument("--jogos-ag", required=True, help="TXT de jogos agressivo (com timestamp)")
-    p.add_argument("--jogos-cons", required=True, help="TXT de jogos conservador (com timestamp)")
-
-    p.add_argument("--bt-ag-txt", required=False, help="TXT formatado do backtest agressivo")
-    p.add_argument("--bt-cons-txt", required=False, help="TXT formatado do backtest conservador")
-
-    p.add_argument("--dash-resumo", required=False, help="CSV do dashboard resumo geral")
-    p.add_argument("--dash-dist", required=False, help="CSV do dashboard distribuição de acertos")
-
-    p.add_argument("--out", required=False, default="outputs/relatorio_completo.txt", help="Saída TXT")
-    return p
+    p = Path(path)
+    if not p.exists():
+        return f"(arquivo não encontrado: {p})\n"
+    return p.read_text(encoding="utf-8", errors="ignore").strip() + "\n"
 
 
 def main() -> None:
-    args = build_parser().parse_args()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default="", help="Data do relatório")
+    ap.add_argument("--jogos-ag", required=True, help="TXT jogos agressivo (timestamp)")
+    ap.add_argument("--jogos-cons", required=True, help="TXT jogos conservador (timestamp)")
+    ap.add_argument("--bt-ag-txt", default=None, help="TXT backtest agressivo")
+    ap.add_argument("--bt-cons-txt", default=None, help="TXT backtest conservador")
+    ap.add_argument("--dash-resumo", default=None, help="CSV resumo do dashboard (opcional)")
+    ap.add_argument("--dash-dist", default=None, help="CSV distribuição do dashboard (opcional)")
+    ap.add_argument("--out", required=True, help="TXT final do relatório completo")
+    args = ap.parse_args()
 
-    data = args.data or ""
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
 
-    parts = []
-    parts.append("==============================================\n"
-                 "        RELATÓRIO COMPLETO DO WIZARD\n"
-                 f"        DATA: {data}\n"
-                 "==============================================\n\n")
+    header = []
+    header.append("=" * 46)
+    header.append("RELATÓRIO COMPLETO DO WIZARD")
+    if args.data:
+        header.append(f"DATA: {args.data}")
+    header.append("=" * 46)
+    header.append("")
 
-    parts.append("------------ BACKTEST — MODO AGRESSIVO ------------\n")
-    parts.append(_read_text(args.bt_ag_txt) + "\n\n")
+    sections = []
 
-    parts.append("------------ BACKTEST — MODO CONSERVADOR ------------\n")
-    parts.append(_read_text(args.bt_cons_txt) + "\n\n")
+    sections.append("------------ BACKTEST — MODO AGRESSIVO ------------\n" + _read_optional(args.bt_ag_txt))
+    sections.append("------------ BACKTEST — MODO CONSERVADOR ------------\n" + _read_optional(args.bt_cons_txt))
 
-    parts.append("------------ DISTRIBUIÇÃO DE ACERTOS ------------\n")
-    parts.append(_read_text(args.dash_dist) + "\n\n")
+    # dashboard csv (quando existir)
+    dash_resumo = _read_optional(args.dash_resumo)
+    dash_dist = _read_optional(args.dash_dist)
 
-    parts.append("------------ JOGOS GERADOS — AGRESSIVO ------------\n")
-    parts.append(_read_text(args.jogos_ag) + "\n\n")
+    if dash_resumo.strip():
+        sections.append("------------ DASHBOARD — RESUMO GERAL (CSV) ------------\n" + dash_resumo)
 
-    parts.append("------------ JOGOS GERADOS — CONSERVADOR ------------\n")
-    parts.append(_read_text(args.jogos_cons) + "\n\n")
+    if dash_dist.strip():
+        sections.append("------------ DISTRIBUIÇÃO DE ACERTOS (CSV) ------------\n" + dash_dist)
 
-    # Interpretação simples do melhor do dia (se tiver backtest txt legível)
-    parts.append("============ RECOMENDAÇÃO FINAL ============\n")
-    parts.append("✔ Use o melhor jogo do agressivo para explosão\n")
-    parts.append("✔ Combine com o mais estável do conservador\n")
-    parts.append("✔ Para apostar só 1 jogo: use o melhor agressivo\n")
-    parts.append("✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio\n\n")
+    sections.append("------------ JOGOS GERADOS — AGRESSIVO ------------\n" + _read_optional(args.jogos_ag))
+    sections.append("------------ JOGOS GERADOS — CONSERVADOR ------------\n" + _read_optional(args.jogos_cons))
 
-    out_path.write_text("".join(parts), encoding="utf-8")
-    print(f"OK: gerou {out_path}")
+    # interpretação simples (texto) — você pode evoluir depois
+    sections.append(
+        "============ RECOMENDAÇÃO FINAL ============\n"
+        "✔ Use o melhor jogo do agressivo para explosão\n"
+        "✔ Combine com o mais estável do conservador\n"
+        "✔ Para apostar só 1 jogo: use o melhor agressivo\n"
+        "✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio\n"
+    )
+
+    txt = "\n".join(header) + "\n".join(sections).strip() + "\n"
+    out.write_text(txt, encoding="utf-8")
+    print(f"OK - Relatório completo gerado: {out}")
 
 
 if __name__ == "__main__":
