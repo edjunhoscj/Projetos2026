@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
@@ -9,217 +8,211 @@ from typing import List, Set, Tuple, Optional
 import pandas as pd
 
 
-# -------------------------
-# Parse de jogos (robusto)
-# -------------------------
-def parse_jogos_arquivo(path: Path) -> List[Tuple[int, ...]]:
-    """
-    Lê um TXT e extrai jogos de 15 dezenas (1..25), aceitando formatos como:
-      - "02 03 05 ... 23"
-      - "Jogo 01: 02 03 05 ... 23"
-      - linhas com textos/emoji antes ou depois
-    Regra: pega linhas que contenham EXATAMENTE 15 números válidos (1..25).
-    """
+RE_15_NUMS = re.compile(r"(?:^|:)\s*((?:\d{1,2}\s+){14}\d{1,2})\s*$")
+
+
+def _read_text(path: Path) -> str:
     if not path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {path}")
+    return path.read_text(encoding="utf-8", errors="ignore")
 
-    jogos: List[Tuple[int, ...]] = []
 
-    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw.strip()
-        if not line:
+def parse_jogos_arquivo(path: Path) -> List[Set[int]]:
+    """
+    Extrai jogos (15 dezenas) de um TXT do wizard.
+
+    Aceita linhas como:
+      - "Jogo 01: 02 03 ... 25"
+      - "02 03 05 ... 25"
+    """
+    txt = _read_text(path)
+    linhas = txt.splitlines()
+
+    jogos: List[Set[int]] = []
+
+    for ln in linhas:
+        ln = ln.strip()
+        if not ln:
             continue
 
-        # extrai todos números 1-2 dígitos
-        nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", line)]
-        # filtra somente 1..25
+        m = RE_15_NUMS.search(ln)
+        if m:
+            nums = [int(x) for x in m.group(1).split()]
+            if len(nums) == 15:
+                jogos.append(set(nums))
+            continue
+
+        # fallback: pega qualquer linha que tenha exatamente 15 números 1-25
+        nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", ln)]
         nums = [n for n in nums if 1 <= n <= 25]
-
         if len(nums) == 15:
-            # mantém a ordem do arquivo, mas valida se são 15 distintas
-            if len(set(nums)) == 15:
-                jogos.append(tuple(nums))
+            jogos.append(set(nums))
 
-    # fallback: às vezes o arquivo tem linhas quebradas ou formatos estranhos
-    # então tentamos encontrar sequências de 15 números no arquivo inteiro.
-    if not jogos:
-        content = path.read_text(encoding="utf-8", errors="ignore")
-        nums_all = [int(x) for x in re.findall(r"\b\d{1,2}\b", content)]
-        nums_all = [n for n in nums_all if 1 <= n <= 25]
-
-        # procura janelas de 15 números distintos
-        for i in range(0, max(0, len(nums_all) - 14)):
-            window = nums_all[i : i + 15]
-            if len(window) == 15 and len(set(window)) == 15:
-                jogos.append(tuple(window))
-                # normalmente já basta (mas deixo coletar mais se houver)
-
-    # remove duplicados mantendo ordem
+    # remove duplicados preservando ordem
+    uniq: List[Set[int]] = []
     seen = set()
-    jogos_uni = []
-    for j in jogos:
-        if j not in seen:
-            seen.add(j)
-            jogos_uni.append(j)
+    for s in jogos:
+        key = tuple(sorted(s))
+        if key not in seen:
+            seen.add(key)
+            uniq.append(s)
 
-    if not jogos_uni:
+    if not uniq:
+        head = "\n".join(linhas[:120])
         raise ValueError(
-            "Nenhum jogo foi encontrado no arquivo. "
-            "Confirme se é um TXT gerado pelo Wizard e contém linhas com 15 dezenas (1..25)."
+            "Nenhum jogo foi encontrado no arquivo.\n"
+            "Confirme se o TXT foi gerado pelo wizard e contém linhas com 15 dezenas.\n\n"
+            "---- HEAD (primeiras 120 linhas) ----\n"
+            f"{head}\n"
         )
 
-    return jogos_uni
+    return uniq
 
 
-# -------------------------
-# Leitura da base de sorteios
-# -------------------------
-def _infer_dezenas_from_df(df: pd.DataFrame) -> pd.DataFrame:
+def _detect_dezenas_cols(df: pd.DataFrame) -> List[str]:
     """
-    Tenta inferir as 15 dezenas por linha da base.
-    Suporta:
-      - colunas já numéricas (15 colunas)
-      - colunas nomeadas tipo 'D1'..'D15', 'dez1'.. etc
-    Retorna DF com colunas d1..d15 (int).
+    Tenta detectar automaticamente colunas que representem dezenas (15 colunas).
+    Estratégia: pega colunas numéricas com valores entre 1 e 25, e escolhe as 15 primeiras.
     """
-    # pega colunas numéricas
-    num_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-    # tenta usar as primeiras 15 numéricas
-    if len(num_cols) >= 15:
-        dez = df[num_cols[:15]].copy()
-        dez.columns = [f"d{i}" for i in range(1, 16)]
-        return dez.astype(int)
-
-    # tenta achar por nomes comuns
-    patterns = [
-        r"^d(?:ez)?\s*0*([1-9]|1[0-5])$",
-        r"^dezena\s*0*([1-9]|1[0-5])$",
-        r"^bola\s*0*([1-9]|1[0-5])$",
-    ]
-    pick = {}
+    numeric_cols = []
     for c in df.columns:
-        name = str(c).strip().lower()
-        for p in patterns:
-            m = re.match(p, name)
-            if m:
-                idx = int(m.group(1))
-                pick[idx] = c
+        s = pd.to_numeric(df[c], errors="coerce")
+        if s.notna().mean() < 0.6:
+            continue
+        vmin = s.min(skipna=True)
+        vmax = s.max(skipna=True)
+        if pd.notna(vmin) and pd.notna(vmax) and 1 <= vmin <= 25 and 1 <= vmax <= 25:
+            numeric_cols.append(c)
 
-    if len(pick) >= 15:
-        cols = [pick[i] for i in range(1, 16)]
-        dez = df[cols].copy()
-        dez.columns = [f"d{i}" for i in range(1, 16)]
-        return dez.astype(int)
+    # se tiver colunas com nomes típicos
+    prefer = [c for c in df.columns if str(c).lower() in {f"d{i}" for i in range(1, 16)}]
+    if len(prefer) >= 15:
+        return prefer[:15]
+
+    if len(numeric_cols) >= 15:
+        return numeric_cols[:15]
 
     raise ValueError(
-        "Não consegui inferir as 15 dezenas na base. "
-        "Garanta que a planilha tenha 15 colunas numéricas de dezenas por concurso."
+        "Não consegui detectar 15 colunas de dezenas na base.\n"
+        "Verifique o formato do arquivo base/base_limpa.xlsx."
     )
 
 
-def carregar_base(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Base não encontrada: {path}")
+def load_base_sorteios(base_path: Path, ultimos: int) -> List[Set[int]]:
+    """
+    Lê base/base_limpa.xlsx e devolve lista dos últimos N concursos como conjuntos de dezenas.
+    """
+    if not base_path.exists():
+        raise FileNotFoundError(f"Base não encontrada: {base_path}")
 
-    # tenta Excel primeiro
-    if path.suffix.lower() in {".xlsx", ".xls"}:
-        df = pd.read_excel(path)
-    else:
-        df = pd.read_csv(path)
+    # tenta carregar a primeira planilha
+    df = pd.read_excel(base_path)
 
-    dezenas = _infer_dezenas_from_df(df)
-    return dezenas
+    if df.empty:
+        raise ValueError("Base está vazia.")
 
+    cols = _detect_dezenas_cols(df)
 
-# -------------------------
-# Backtest
-# -------------------------
-def backtest(jogos: List[Tuple[int, ...]], base_dezenas: pd.DataFrame, ultimos: int) -> pd.DataFrame:
-    # usa os últimos N concursos
-    base = base_dezenas.tail(int(ultimos)).reset_index(drop=True)
+    # pega os últimos N registros
+    df_tail = df.tail(int(ultimos)).copy()
 
     sorteios: List[Set[int]] = []
-    for _, row in base.iterrows():
-        s = set(int(row[f"d{i}"]) for i in range(1, 16))
-        sorteios.append(s)
+    for _, row in df_tail.iterrows():
+        nums = []
+        for c in cols:
+            v = row.get(c)
+            try:
+                n = int(v)
+            except Exception:
+                continue
+            if 1 <= n <= 25:
+                nums.append(n)
+        if len(nums) >= 15:
+            sorteios.append(set(nums[:15]))
+        elif len(nums) == 15:
+            sorteios.append(set(nums))
 
+    if not sorteios:
+        raise ValueError("Não consegui extrair sorteios (15 dezenas) da base.")
+
+    return sorteios
+
+
+def backtest(jogos: List[Set[int]], sorteios: List[Set[int]]) -> pd.DataFrame:
     rows = []
     for idx, jogo in enumerate(jogos, start=1):
-        jogo_set = set(jogo)
-        acertos = [len(jogo_set & s) for s in sorteios]
-
-        # distribuição (11..15) – ajuste se quiser incluir mais faixas
-        dist = {k: sum(1 for a in acertos if a == k) for k in range(11, 16)}
-
+        acertos = [len(jogo.intersection(s)) for s in sorteios]
         rows.append(
             {
                 "jogo": idx,
-                "media_acertos": float(sum(acertos) / len(acertos)) if acertos else 0.0,
-                "max_acertos": int(max(acertos)) if acertos else 0,
-                "min_acertos": int(min(acertos)) if acertos else 0,
-                **{f"{k}.0": dist[k] for k in range(11, 16)},  # compatível com seu layout 11.0,12.0...
+                "media_acertos": sum(acertos) / len(acertos),
+                "max_acertos": max(acertos),
+                "min_acertos": min(acertos),
+                "11.0": acertos.count(11),
+                "12.0": acertos.count(12),
+                "13.0": acertos.count(13),
+                "14.0": acertos.count(14),
+                "15.0": acertos.count(15),
             }
         )
 
-    df = pd.DataFrame(rows).sort_values(["media_acertos", "max_acertos"], ascending=False).reset_index(drop=True)
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["media_acertos", "max_acertos"], ascending=[False, False]).reset_index(drop=True)
     return df
 
 
-def df_to_txt(df: pd.DataFrame, titulo: str) -> str:
-    # mostra as colunas principais primeiro
-    cols = ["jogo", "media_acertos", "max_acertos", "min_acertos"] + [c for c in df.columns if c.endswith(".0")]
-    cols = [c for c in cols if c in df.columns]
-    out = []
-    out.append("=" * 46)
-    out.append(titulo)
-    out.append("=" * 46)
-    out.append(df[cols].to_string(index=False))
-    out.append("")
-    out.append("Legenda:")
-    out.append(" - media_acertos : média de acertos do jogo nos concursos analisados")
-    out.append(" - max_acertos   : maior número de acertos que o jogo já fez")
-    out.append(" - min_acertos   : menor número de acertos que o jogo já fez")
-    out.append(" - colunas 11.0..15.0 : quantas vezes o jogo fez 11, 12, 13, 14, 15 pontos")
-    out.append("")
-    return "\n".join(out)
+def write_txt(df: pd.DataFrame, out_txt: Path, titulo: str) -> None:
+    lines = []
+    lines.append("=" * 46)
+    lines.append(f"{titulo}")
+    lines.append("=" * 46)
+    lines.append("")
+    lines.append("Resumo por jogo (ordenado pela melhor média de acertos):")
+    lines.append("")
+    # mostra colunas principais
+    view_cols = ["jogo", "media_acertos", "max_acertos", "min_acertos", "11.0", "12.0", "13.0"]
+    view = df[view_cols].copy()
+    view["media_acertos"] = view["media_acertos"].map(lambda x: f"{x:.4f}")
+    lines.append(view.to_string(index=False))
+    lines.append("")
+    lines.append("Legenda:")
+    lines.append("- media_acertos : média de acertos do jogo nos concursos analisados")
+    lines.append("- max_acertos   : maior número de acertos que o jogo já fez")
+    lines.append("- min_acertos   : menor número de acertos que o jogo já fez")
+    lines.append("- colunas 11.0, 12.0, 13.0 etc: quantas vezes o jogo fez 11, 12, 13 pontos...")
+    out_txt.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--jogos-file", required=True, help="TXT com jogos do Wizard")
-    ap.add_argument("--base", default="base/base_limpa.xlsx", help="Base histórica (xlsx/csv)")
-    ap.add_argument("--ultimos", type=int, default=20, help="Quantidade de concursos a usar no backtest")
-    ap.add_argument("--csv-out", required=True, help="Caminho do CSV de saída")
-
-    # compatibilidade: você às vezes tentou --out (txt). Vamos aceitar.
-    ap.add_argument("--out", dest="txt_out", default=None, help="(opcional) Caminho do TXT de saída")
-    ap.add_argument("--txt-out", dest="txt_out2", default=None, help="(opcional) Caminho do TXT de saída")
-
+    ap.add_argument("--jogos-file", required=True, help="TXT gerado pelo wizard (com dezenas)")
+    ap.add_argument("--base", default="base/base_limpa.xlsx", help="Base limpa (xlsx)")
+    ap.add_argument("--ultimos", type=int, default=20, help="Quantidade de concursos a considerar")
+    ap.add_argument("--csv-out", required=True, help="Saída CSV do backtest")
+    ap.add_argument("--out", default=None, help="Saída TXT formatada (opcional)")
+    ap.add_argument("--titulo", default="BACKTEST", help="Título do TXT (se --out for usado)")
     args = ap.parse_args()
 
     jogos_file = Path(args.jogos_file)
-    base_file = Path(args.base)
+    base_path = Path(args.base)
     csv_out = Path(args.csv_out)
-
-    txt_out: Optional[Path] = None
-    if args.txt_out2:
-        txt_out = Path(args.txt_out2)
-    elif args.txt_out:
-        txt_out = Path(args.txt_out)
+    txt_out: Optional[Path] = Path(args.out) if args.out else None
 
     jogos = parse_jogos_arquivo(jogos_file)
-    base = carregar_base(base_file)
-    df = backtest(jogos, base, args.ultimos)
+    sorteios = load_base_sorteios(base_path, args.ultimos)
+    df = backtest(jogos, sorteios)
 
     csv_out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(csv_out, index=False)
 
-    # se não especificar TXT, cria um .txt ao lado do CSV
-    if txt_out is None:
-        txt_out = csv_out.with_suffix(".txt")
+    if txt_out is not None:
+        txt_out.parent.mkdir(parents=True, exist_ok=True)
+        write_txt(df, txt_out, args.titulo)
 
-    txt_out.parent.mkdir(parents=True, exist_ok=True)
-    txt_out.write_text(df_to_txt(df, "BACKTEST"), encoding="utf-8")
+    print("OK - Backtest concluído")
+    print(f"CSV: {csv_out}")
+    if txt_out is not None:
+        print(f"TXT: {txt_out}")
 
 
 if __name__ == "__main__":
