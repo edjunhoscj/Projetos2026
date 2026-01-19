@@ -1,0 +1,31 @@
+==============================================
+RELATÓRIO MASTIGADO DO BACKTEST
+DATA: 19-01-2026
+==============================================
+
+TOP 5 — AGRESSIVO (por média)
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    1          10.10           12            8     7     2     0     0     0
+    2          10.05           13            8     4     2     1     0     0
+    4          10.00           12            6     6     2     0     0     0
+    3          10.00           11            8     6     0     0     0     0
+    5           9.95           14            7     3     3     0     1     0
+
+TOP 5 — CONSERVADOR (por média)
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    1          10.20           12            7     9     2     0     0     0
+    2          10.00           13            7     8     0     1     0     0
+    4           9.95           13            7     3     4     1     0     0
+    3           9.95           12            8     6     2     0     0     0
+    5           9.95           12            7     7     1     0     0     0
+
+INTERPRETAÇÃO (mastigada)
+- Melhor do AGRESSIVO: jogo 1 | média 10.1000 | max 12 | min 8
+- Melhor do CONSERVADOR: jogo 1 | média 10.2000 | max 12 | min 7
+- Mais estável no CONSERVADOR: jogo 3 | min 8 | média 9.9500
+
+RECOMENDAÇÃO PRÁTICA
+✔ Se for apostar 1 jogo (explosão): use o melhor do AGRESSIVO
+✔ Se for apostar 2 jogos: melhor AGRESSIVO + mais estável CONSERVADOR
+✔ Se for apostar 3 jogos: melhor AGRESSIVO + melhor CONSERVADOR + mais estável CONSERVADOR
+
