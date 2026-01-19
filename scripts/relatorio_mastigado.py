@@ -1,86 +1,99 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 from pathlib import Path
-
 import pandas as pd
 
 
-def _agora_sp() -> str:
-    # sem depender de pytz; no GitHub Actions você já usa TZ no shell
-    return datetime.now().strftime("%d-%m-%Y")
-
-
-def _read_backtest_csv(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Arquivo não encontrado: {path}")
-    df = pd.read_csv(path)
-
-    # normaliza nomes
-    if "Jogo" not in df.columns and "jogo" in df.columns:
-        df = df.rename(columns={"jogo": "Jogo"})
-
+def _carregar(csv_path: Path) -> pd.DataFrame:
+    if not csv_path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {csv_path}")
+    df = pd.read_csv(csv_path)
+    # garante ordenação
+    if "media_acertos" in df.columns:
+        df = df.sort_values(["media_acertos", "max_acertos", "min_acertos"], ascending=[False, False, False])
     return df
 
 
-def _df_to_pretty(df: pd.DataFrame) -> str:
-    # deixa as colunas 11.0 12.0 13.0… como inteiros
-    for c in df.columns:
-        if isinstance(c, str) and c.endswith(".0"):
-            try:
-                df[c] = df[c].fillna(0).astype(int)
-            except Exception:
-                pass
+def _melhor_jogo(df: pd.DataFrame) -> pd.Series:
+    return df.iloc[0]
 
-    # formata
-    return df.to_string(index=False)
+
+def _mais_estavel(df: pd.DataFrame) -> pd.Series:
+    """
+    "Estável" aqui = maior min_acertos e depois melhor média.
+    """
+    if "min_acertos" not in df.columns:
+        return df.iloc[0]
+    df2 = df.sort_values(["min_acertos", "media_acertos", "max_acertos"], ascending=[False, False, False])
+    return df2.iloc[0]
+
+
+def gerar_relatorio(ag_csv: Path, cons_csv: Path, out_txt: Path, data: str | None = None) -> None:
+    ag = _carregar(ag_csv)
+    cons = _carregar(cons_csv)
+
+    best_ag = _melhor_jogo(ag)
+    best_cons = _melhor_jogo(cons)
+
+    stable_ag = _mais_estavel(ag)
+    stable_cons = _mais_estavel(cons)
+
+    out_txt.parent.mkdir(parents=True, exist_ok=True)
+
+    lines = []
+    lines.append("=" * 60)
+    lines.append("RELATÓRIO MASTIGADO DO BACKTEST")
+    if data:
+        lines.append(f"DATA: {data}")
+    lines.append("=" * 60)
+    lines.append("")
+
+    lines.append("== Melhor por média (AGRESSIVO) ==")
+    lines.append(best_ag.to_string())
+    lines.append("")
+
+    lines.append("== Mais estável (AGRESSIVO) ==")
+    lines.append(stable_ag.to_string())
+    lines.append("")
+
+    lines.append("== Melhor por média (CONSERVADOR) ==")
+    lines.append(best_cons.to_string())
+    lines.append("")
+
+    lines.append("== Mais estável (CONSERVADOR) ==")
+    lines.append(stable_cons.to_string())
+    lines.append("")
+
+    lines.append("=" * 60)
+    lines.append("RECOMENDAÇÃO PRÁTICA")
+    lines.append("=" * 60)
+    lines.append("✔ Para apostar SÓ 1 jogo: pegue o melhor por média do AGRESSIVO.")
+    lines.append("✔ Para apostar 2 jogos: melhor AGRESSIVO + mais estável CONSERVADOR.")
+    lines.append("✔ Para apostar 3 jogos: melhor AGRESSIVO + mais estável CONSERVADOR + melhor do CONSERVADOR.")
+    lines.append("")
+    lines.append("Observação: backtest mede desempenho histórico; não garante resultado futuro.")
+    lines.append("")
+
+    out_txt.write_text("\n".join(lines), encoding="utf-8")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description="Gera relatório mastigado comparando dois backtests.")
+    p.add_argument("--agressivo", required=True, help="CSV do backtest agressivo")
+    p.add_argument("--conservador", required=True, help="CSV do backtest conservador")
+    p.add_argument("--out", required=True, help="TXT de saída")
+    p.add_argument("--data", required=False, help="Data DD-MM-AAAA (opcional)")
+    return p
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Gera relatório TXT 'mastigado' a partir dos backtests CSV.")
-    parser.add_argument("--agressivo", required=True, help="CSV backtest agressivo")
-    parser.add_argument("--conservador", required=True, help="CSV backtest conservador")
-    parser.add_argument("--out", required=False, help="TXT de saída (se omitido, gera automático em outputs/)")
-    parser.add_argument("--data", required=False, help="Data (DD-MM-YYYY) para imprimir no topo")
-    args = parser.parse_args()
-
-    ag_csv = Path(args.agressivo)
-    cons_csv = Path(args.conservador)
-
-    df_ag = _read_backtest_csv(ag_csv)
-    df_cons = _read_backtest_csv(cons_csv)
-
-    data = args.data or _agora_sp()
-
-    out = Path(args.out) if args.out else Path("outputs") / f"relatorio_mastigado_{data}.txt"
-    out.parent.mkdir(parents=True, exist_ok=True)
-
-    linhas = []
-    linhas.append("=" * 46)
-    linhas.append(" RELATORIO MASTIGADO DO BACKTEST (TXT) ")
-    linhas.append(f" DATA: {data}")
-    linhas.append("=" * 46)
-    linhas.append("")
-    linhas.append("------------ BACKTEST — MODO AGRESSIVO ------------")
-    linhas.append("Resumo por jogo (ordenado pela melhor media de acertos):")
-    linhas.append("")
-    linhas.append(_df_to_pretty(df_ag))
-    linhas.append("")
-    linhas.append("------------ BACKTEST — MODO CONSERVADOR ------------")
-    linhas.append("Resumo por jogo (ordenado pela melhor media de acertos):")
-    linhas.append("")
-    linhas.append(_df_to_pretty(df_cons))
-    linhas.append("")
-    linhas.append("Legenda:")
-    linhas.append(" - media_acertos : media de acertos do jogo nos concursos analisados")
-    linhas.append(" - max_acertos   : maior numero de acertos que o jogo ja fez")
-    linhas.append(" - min_acertos   : menor numero de acertos que o jogo ja fez")
-    linhas.append(" - colunas 11.0, 12.0, 13.0 ... : quantas vezes o jogo fez 11, 12, 13 pontos etc")
-    linhas.append("")
-
-    out.write_text("\n".join(linhas), encoding="utf-8")
-    print(f"✅ Relatorio mastigado gerado: {out}")
+    args = build_parser().parse_args()
+    gerar_relatorio(Path(args.agressivo), Path(args.conservador), Path(args.out), args.data)
+    print(f"OK: gerou {args.out}")
 
 
 if __name__ == "__main__":
