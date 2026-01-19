@@ -72,6 +72,14 @@ jobs:
       - name: Gerar combinações inteligentes
         run: python scripts/gerar_combinacoes.py
 
+      - name: Debug - combinacoes geradas
+        run: |
+          echo "LINHAS (combinacoes_inteligentes.txt):"
+          wc -l combinacoes/combinacoes_inteligentes.txt || true
+          echo "HEAD:"
+          head -n 5 combinacoes/combinacoes_inteligentes.txt || true
+
+
       # -----------------------------
       # 1) GERAR JOGOS (TXT)
       # -----------------------------
