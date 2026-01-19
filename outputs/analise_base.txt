@@ -1,0 +1,41 @@
+============================================================
+ANÁLISE BASE (últimos 200 concursos do arquivo)
+Arquivo: base/base_limpa.xlsx
+Concurso: 3390 .. 3589
+============================================================
+
+SOMA das dezenas:
+  mediana: 195 | p5: 165 | p95: 220
+
+ÍMPARES por jogo:
+  mediana: 8 | p5: 6 | p95: 10
+
+CONSECUTIVOS (pares adjacentes dentro do jogo):
+  mediana: 8 | p5: 7 | p95: 10
+
+REPETIÇÃO com o concurso anterior:
+  mediana: 9 | p5: 7 | p95: 11
+  distribuição (qtde -> ocorrências):
+     6 -> 4
+     7 -> 17
+     8 -> 53
+     9 -> 67
+    10 -> 33
+    11 -> 22
+    12 -> 3
+
+DISTRIBUIÇÃO por LINHAS (1-5, 6-10, 11-15, 16-20, 21-25):
+  médias: [3.04, 2.88, 3.1, 2.96, 3.02]
+  p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 4.0, 5.0, 4.0, 5.0]
+
+DISTRIBUIÇÃO por COLUNAS (1/6/11/16/21 ...):
+  médias: [3.045, 3.115, 2.92, 2.97, 2.95]
+  p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 5.0, 5.0, 5.0, 4.0]
+
+Sugestão de filtros/penalizações (com base nesses ranges):
+  - ímpares: 6 a 9 (ideal 7–8)
+  - soma: p5..p95
+  - repetição com último concurso: p5..p95
+  - consecutivos: p5..p95
+  - linhas/colunas: evitar extremos (muito 0 ou muito 5)
+============================================================
