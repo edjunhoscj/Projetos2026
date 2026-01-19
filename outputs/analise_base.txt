@@ -1,7 +1,7 @@
 ============================================================
 ANÁLISE BASE (últimos 200 concursos do arquivo)
 Arquivo: base/base_limpa.xlsx
-Concurso: 3390 .. 3589
+Concurso: 3391 .. 3590
 ============================================================
 
 SOMA das dezenas:
@@ -18,18 +18,18 @@ REPETIÇÃO com o concurso anterior:
   distribuição (qtde -> ocorrências):
      6 -> 4
      7 -> 17
-     8 -> 53
-     9 -> 67
+     8 -> 52
+     9 -> 68
     10 -> 33
     11 -> 22
     12 -> 3
 
 DISTRIBUIÇÃO por LINHAS (1-5, 6-10, 11-15, 16-20, 21-25):
-  médias: [3.04, 2.88, 3.1, 2.96, 3.02]
+  médias: [3.025, 2.885, 3.105, 2.965, 3.02]
   p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 4.0, 5.0, 4.0, 5.0]
 
 DISTRIBUIÇÃO por COLUNAS (1/6/11/16/21 ...):
-  médias: [3.045, 3.115, 2.92, 2.97, 2.95]
+  médias: [3.045, 3.115, 2.92, 2.965, 2.955]
   p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 5.0, 5.0, 5.0, 4.0]
 
 Sugestão de filtros/penalizações (com base nesses ranges):
