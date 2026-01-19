@@ -1,6 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from __future__ import annotations
 
 import argparse
@@ -8,92 +5,79 @@ from pathlib import Path
 import pandas as pd
 
 
-def _carregar(csv_path: Path) -> pd.DataFrame:
-    if not csv_path.exists():
-        raise FileNotFoundError(f"Arquivo não encontrado: {csv_path}")
-    df = pd.read_csv(csv_path)
-    # garante ordenação
-    if "media_acertos" in df.columns:
-        df = df.sort_values(["media_acertos", "max_acertos", "min_acertos"], ascending=[False, False, False])
+def _read_backtest_csv(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Arquivo não encontrado: {path}")
+    df = pd.read_csv(path)
+    # normaliza nomes
+    df.columns = [c.strip() for c in df.columns]
     return df
 
 
-def _melhor_jogo(df: pd.DataFrame) -> pd.Series:
-    return df.iloc[0]
+def _pick_best(df: pd.DataFrame) -> pd.Series:
+    df2 = df.sort_values(["media_acertos", "max_acertos", "min_acertos"], ascending=[False, False, False])
+    return df2.iloc[0]
 
 
-def _mais_estavel(df: pd.DataFrame) -> pd.Series:
-    """
-    "Estável" aqui = maior min_acertos e depois melhor média.
-    """
-    if "min_acertos" not in df.columns:
-        return df.iloc[0]
+def _pick_stable(df: pd.DataFrame) -> pd.Series:
+    # estabilidade = maior mínimo, depois maior média
     df2 = df.sort_values(["min_acertos", "media_acertos", "max_acertos"], ascending=[False, False, False])
     return df2.iloc[0]
 
 
-def gerar_relatorio(ag_csv: Path, cons_csv: Path, out_txt: Path, data: str | None = None) -> None:
-    ag = _carregar(ag_csv)
-    cons = _carregar(cons_csv)
-
-    best_ag = _melhor_jogo(ag)
-    best_cons = _melhor_jogo(cons)
-
-    stable_ag = _mais_estavel(ag)
-    stable_cons = _mais_estavel(cons)
-
-    out_txt.parent.mkdir(parents=True, exist_ok=True)
+def build_report(df_ag: pd.DataFrame, df_cons: pd.DataFrame, data: str) -> str:
+    best_ag = _pick_best(df_ag)
+    best_cons = _pick_best(df_cons)
+    stable_cons = _pick_stable(df_cons)
 
     lines = []
-    lines.append("=" * 60)
+    lines.append("=" * 46)
     lines.append("RELATÓRIO MASTIGADO DO BACKTEST")
-    if data:
-        lines.append(f"DATA: {data}")
-    lines.append("=" * 60)
+    lines.append(f"DATA: {data}")
+    lines.append("=" * 46)
     lines.append("")
 
-    lines.append("== Melhor por média (AGRESSIVO) ==")
-    lines.append(best_ag.to_string())
+    lines.append("TOP 5 — AGRESSIVO (por média)")
+    lines.append(df_ag.sort_values("media_acertos", ascending=False).head(5).to_string(index=False))
     lines.append("")
 
-    lines.append("== Mais estável (AGRESSIVO) ==")
-    lines.append(stable_ag.to_string())
+    lines.append("TOP 5 — CONSERVADOR (por média)")
+    lines.append(df_cons.sort_values("media_acertos", ascending=False).head(5).to_string(index=False))
     lines.append("")
 
-    lines.append("== Melhor por média (CONSERVADOR) ==")
-    lines.append(best_cons.to_string())
+    lines.append("INTERPRETAÇÃO (mastigada)")
+    lines.append(f"- Melhor do AGRESSIVO: jogo {int(best_ag['jogo'])} | média {best_ag['media_acertos']:.4f} | max {int(best_ag['max_acertos'])} | min {int(best_ag['min_acertos'])}")
+    lines.append(f"- Melhor do CONSERVADOR: jogo {int(best_cons['jogo'])} | média {best_cons['media_acertos']:.4f} | max {int(best_cons['max_acertos'])} | min {int(best_cons['min_acertos'])}")
+    lines.append(f"- Mais estável no CONSERVADOR: jogo {int(stable_cons['jogo'])} | min {int(stable_cons['min_acertos'])} | média {stable_cons['media_acertos']:.4f}")
     lines.append("")
 
-    lines.append("== Mais estável (CONSERVADOR) ==")
-    lines.append(stable_cons.to_string())
-    lines.append("")
-
-    lines.append("=" * 60)
     lines.append("RECOMENDAÇÃO PRÁTICA")
-    lines.append("=" * 60)
-    lines.append("✔ Para apostar SÓ 1 jogo: pegue o melhor por média do AGRESSIVO.")
-    lines.append("✔ Para apostar 2 jogos: melhor AGRESSIVO + mais estável CONSERVADOR.")
-    lines.append("✔ Para apostar 3 jogos: melhor AGRESSIVO + mais estável CONSERVADOR + melhor do CONSERVADOR.")
-    lines.append("")
-    lines.append("Observação: backtest mede desempenho histórico; não garante resultado futuro.")
+    lines.append("✔ Se for apostar 1 jogo (explosão): use o melhor do AGRESSIVO")
+    lines.append("✔ Se for apostar 2 jogos: melhor AGRESSIVO + mais estável CONSERVADOR")
+    lines.append("✔ Se for apostar 3 jogos: melhor AGRESSIVO + melhor CONSERVADOR + mais estável CONSERVADOR")
     lines.append("")
 
-    out_txt.write_text("\n".join(lines), encoding="utf-8")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Gera relatório mastigado comparando dois backtests.")
-    p.add_argument("--agressivo", required=True, help="CSV do backtest agressivo")
-    p.add_argument("--conservador", required=True, help="CSV do backtest conservador")
-    p.add_argument("--out", required=True, help="TXT de saída")
-    p.add_argument("--data", required=False, help="Data DD-MM-AAAA (opcional)")
-    return p
+    return "\n".join(lines) + "\n"
 
 
 def main() -> None:
-    args = build_parser().parse_args()
-    gerar_relatorio(Path(args.agressivo), Path(args.conservador), Path(args.out), args.data)
-    print(f"OK: gerou {args.out}")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--agressivo", required=True, help="CSV do backtest agressivo")
+    ap.add_argument("--conservador", required=True, help="CSV do backtest conservador")
+    ap.add_argument("--out", required=True, help="Arquivo TXT de saída")
+    ap.add_argument("--data", default="", help="Data para o relatório (ex: 15-01-2026)")
+    args = ap.parse_args()
+
+    df_ag = _read_backtest_csv(Path(args.agressivo))
+    df_cons = _read_backtest_csv(Path(args.conservador))
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    txt = build_report(df_ag, df_cons, args.data or "-")
+    out_path.write_text(txt, encoding="utf-8")
+
+    print(f"OK - Relatório mastigado gerado: {out_path}")
 
 
 if __name__ == "__main__":
