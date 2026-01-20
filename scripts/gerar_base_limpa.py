@@ -1,85 +1,70 @@
-# scripts/gerar_base_limpa.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
+
 import pandas as pd
 
 
-BASE_DIR = Path("base")
-ARQ_ATUALIZADA = BASE_DIR / "base_dados_atualizada.xlsx"
-ARQ_LIMPA = BASE_DIR / "base_limpa.xlsx"
-
-
-def _norm(s: str) -> str:
-    return "".join(ch.lower() for ch in str(s).strip())
+COLS_DEZENAS = [f"D{i}" for i in range(1, 16)]
+COLS_OBRIG = ["Concurso"] + COLS_DEZENAS
 
 
 def main() -> int:
-    if not ARQ_ATUALIZADA.exists():
-        raise SystemExit(f"Arquivo não encontrado: {ARQ_ATUALIZADA}")
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--in", dest="inp", default="base/base_dados_atualizada.xlsx", help="Base bruta (XLSX)")
+    ap.add_argument("--out", default="base/base_limpa.xlsx", help="Base limpa (XLSX)")
+    args = ap.parse_args()
 
-    df = pd.read_excel(ARQ_ATUALIZADA)
+    inp = Path(args.inp)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    if not inp.exists():
+        print(f"❌ Arquivo de entrada não existe: {inp.as_posix()}")
+        return 1
+
+    df = pd.read_excel(inp)
+
+    # normaliza nomes de colunas (evita espaços)
     df.columns = [str(c).strip() for c in df.columns]
-    cols_norm = {_norm(c): c for c in df.columns}
 
-    # tenta mapear concurso
-    concurso_col = None
-    for key in ["concurso", "numero", "numeroconcurso"]:
-        if key in cols_norm:
-            concurso_col = cols_norm[key]
-            break
-    if not concurso_col:
-        raise ValueError(f"Coluna de concurso não encontrada. Colunas: {list(df.columns)}")
+    faltando = [c for c in COLS_OBRIG if c not in df.columns]
+    if faltando:
+        print(f"❌ Colunas faltando na base atualizada: {faltando}")
+        print("📌 Colunas encontradas:", df.columns.tolist())
+        return 1
 
-    # tenta mapear data
-    data_col = None
-    for key in ["data", "dataapuracao", "datasorteio"]:
-        if key in cols_norm:
-            data_col = cols_norm[key]
-            break
+    # garante tipos numéricos
+    df["Concurso"] = pd.to_numeric(df["Concurso"], errors="coerce")
+    for c in COLS_DEZENAS:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # dezenas: D1..D15 (ou variações)
-    dezenas_cols = []
-    for i in range(1, 16):
-        key = _norm(f"D{i}")
-        if key in cols_norm:
-            dezenas_cols.append(cols_norm[key])
+    df = df.dropna(subset=["Concurso"] + COLS_DEZENAS).copy()
 
-    # fallback: se vier como Dezena 1, Dezena 2...
-    if len(dezenas_cols) != 15:
-        dezenas_cols = []
-        for i in range(1, 16):
-            for pat in [f"dezena{i}", f"dezena_{i}", f"dezena {i}"]:
-                if pat in cols_norm:
-                    dezenas_cols.append(cols_norm[pat])
-                    break
+    # concurso inteiro
+    df["Concurso"] = df["Concurso"].astype(int)
 
-    if len(dezenas_cols) != 15:
-        raise ValueError(
-            f"Colunas faltando na base atualizada (preciso 15 dezenas). "
-            f"Encontrei {len(dezenas_cols)}. Colunas: {list(df.columns)}"
-        )
+    # dezenas inteiras 1..25
+    for c in COLS_DEZENAS:
+        df[c] = df[c].astype(int)
 
-    out_cols = ["Concurso", "Data"] + [f"D{i}" for i in range(1, 16)]
-    out = pd.DataFrame()
-    out["Concurso"] = pd.to_numeric(df[concurso_col], errors="coerce").astype("Int64")
-    out["Data"] = df[data_col].fillna("") if data_col else ""
+    for c in COLS_DEZENAS:
+        if not df[c].between(1, 25).all():
+            ruins = df.loc[~df[c].between(1, 25), ["Concurso", c]].head(10)
+            print(f"❌ Encontrei dezenas fora de 1..25 na coluna {c}. Exemplos:")
+            print(ruins.to_string(index=False))
+            return 1
 
-    # coloca D1..D15 já como int
-    for i, src in enumerate(dezenas_cols, start=1):
-        out[f"D{i}"] = pd.to_numeric(df[src], errors="coerce").astype("Int64")
+    # ordena e remove duplicados
+    df = df.sort_values("Concurso").drop_duplicates(subset=["Concurso"], keep="last").reset_index(drop=True)
 
-    out = out.dropna(subset=["Concurso"]).sort_values("Concurso").reset_index(drop=True)
-
-    # sanity
-    if out.empty:
-        raise ValueError("Base limpa ficou vazia. Verifique se a base atualizada tem concursos válidos.")
-
-    ARQ_LIMPA.parent.mkdir(parents=True, exist_ok=True)
-    out.to_excel(ARQ_LIMPA, index=False)
-
-    print(f"✅ Base limpa gerada em: {ARQ_LIMPA}")
-    print(f"✅ Total concursos: {out.shape[0]} | Último: {int(out['Concurso'].max())}")
+    # salva
+    df.to_excel(out, index=False)
+    print(f"✅ Base limpa gerada: {out.as_posix()} | concursos: {len(df)} | último: {df['Concurso'].max()}")
     return 0
 
 
