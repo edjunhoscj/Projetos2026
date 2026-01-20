@@ -9,7 +9,7 @@ on:
       ultimos:
         description: "Quantidade de últimos concursos"
         required: false
-        default: "20"
+        default: "300"
       finais:
         description: "Quantidade de jogos finais"
         required: false
@@ -60,7 +60,7 @@ jobs:
       - name: Definir inputs (ultimos/finais)
         run: |
           set -e
-          ULTIMOS="${{ github.event.inputs.ultimos || '20' }}"
+          ULTIMOS="${{ github.event.inputs.ultimos || '300' }}"
           FINAIS="${{ github.event.inputs.finais || '5' }}"
           echo "ULTIMOS=$ULTIMOS" >> $GITHUB_ENV
           echo "FINAIS=$FINAIS" >> $GITHUB_ENV
