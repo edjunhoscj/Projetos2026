@@ -1,50 +1,87 @@
+# scripts/gerar_base_limpa.py
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
-
 import pandas as pd
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Gera base limpa padronizada (Concurso + D1..D15).")
-    ap.add_argument("--in", dest="inp", default="base/base_dados_atualizada.xlsx")
-    ap.add_argument("--out", default="base/base_limpa.xlsx")
-    args = ap.parse_args()
+BASE_DIR = Path("base")
+ARQ_ATUALIZADA = BASE_DIR / "base_dados_atualizada.xlsx"
+ARQ_LIMPA = BASE_DIR / "base_limpa.xlsx"
 
-    inp = Path(args.inp)
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
 
-    if not inp.exists():
-        raise FileNotFoundError(f"Arquivo de entrada não encontrado: {inp}")
+def _norm(s: str) -> str:
+    return "".join(ch.lower() for ch in str(s).strip())
 
-    df = pd.read_excel(inp)
 
-    cols = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
-    faltando = [c for c in cols if c not in df.columns]
-    if faltando:
-        raise ValueError(f"Colunas faltando na base atualizada: {faltando}")
+def main() -> int:
+    if not ARQ_ATUALIZADA.exists():
+        raise SystemExit(f"Arquivo não encontrado: {ARQ_ATUALIZADA}")
 
-    df = df[cols].copy()
+    df = pd.read_excel(ARQ_ATUALIZADA)
+    df.columns = [str(c).strip() for c in df.columns]
+    cols_norm = {_norm(c): c for c in df.columns}
 
-    # tipos
-    df["Concurso"] = df["Concurso"].astype(int)
+    # tenta mapear concurso
+    concurso_col = None
+    for key in ["concurso", "numero", "numeroconcurso"]:
+        if key in cols_norm:
+            concurso_col = cols_norm[key]
+            break
+    if not concurso_col:
+        raise ValueError(f"Coluna de concurso não encontrada. Colunas: {list(df.columns)}")
+
+    # tenta mapear data
+    data_col = None
+    for key in ["data", "dataapuracao", "datasorteio"]:
+        if key in cols_norm:
+            data_col = cols_norm[key]
+            break
+
+    # dezenas: D1..D15 (ou variações)
+    dezenas_cols = []
     for i in range(1, 16):
-        df[f"D{i}"] = df[f"D{i}"].astype(int)
+        key = _norm(f"D{i}")
+        if key in cols_norm:
+            dezenas_cols.append(cols_norm[key])
 
-    # remove duplicados por concurso, mantendo o mais recente
-    df = df.sort_values("Concurso").drop_duplicates(subset=["Concurso"], keep="last")
-    df = df.sort_values("Concurso").reset_index(drop=True)
+    # fallback: se vier como Dezena 1, Dezena 2...
+    if len(dezenas_cols) != 15:
+        dezenas_cols = []
+        for i in range(1, 16):
+            for pat in [f"dezena{i}", f"dezena_{i}", f"dezena {i}"]:
+                if pat in cols_norm:
+                    dezenas_cols.append(cols_norm[pat])
+                    break
 
-    out_tmp = out.with_suffix(".tmp.xlsx")
-    df.to_excel(out_tmp, index=False)
-    out_tmp.replace(out)
+    if len(dezenas_cols) != 15:
+        raise ValueError(
+            f"Colunas faltando na base atualizada (preciso 15 dezenas). "
+            f"Encontrei {len(dezenas_cols)}. Colunas: {list(df.columns)}"
+        )
 
-    print(f"✅ Base limpa criada com sucesso: {out}")
-    print(f"Total de linhas: {len(df)}")
-    print(f"Último concurso: {int(df['Concurso'].max())}")
+    out_cols = ["Concurso", "Data"] + [f"D{i}" for i in range(1, 16)]
+    out = pd.DataFrame()
+    out["Concurso"] = pd.to_numeric(df[concurso_col], errors="coerce").astype("Int64")
+    out["Data"] = df[data_col].fillna("") if data_col else ""
+
+    # coloca D1..D15 já como int
+    for i, src in enumerate(dezenas_cols, start=1):
+        out[f"D{i}"] = pd.to_numeric(df[src], errors="coerce").astype("Int64")
+
+    out = out.dropna(subset=["Concurso"]).sort_values("Concurso").reset_index(drop=True)
+
+    # sanity
+    if out.empty:
+        raise ValueError("Base limpa ficou vazia. Verifique se a base atualizada tem concursos válidos.")
+
+    ARQ_LIMPA.parent.mkdir(parents=True, exist_ok=True)
+    out.to_excel(ARQ_LIMPA, index=False)
+
+    print(f"✅ Base limpa gerada em: {ARQ_LIMPA}")
+    print(f"✅ Total concursos: {out.shape[0]} | Último: {int(out['Concurso'].max())}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
