@@ -1,204 +1,173 @@
-# scripts/atualizar_base.py
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 from __future__ import annotations
 
 import argparse
-import json
-import os
 import sys
-from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
-
-try:
-    import requests
-except Exception as e:
-    raise SystemExit("Faltou instalar requests. Rode: pip install requests") from e
+import requests
 
 
-BASE_DIR = Path("base")
-BASE_DIR.mkdir(parents=True, exist_ok=True)
-
-ARQ_ATUALIZADA = BASE_DIR / "base_dados_atualizada.xlsx"
-
-# Endpoint mais comum (pode falhar em cloud/CI; deixei configurável por env)
-DEFAULT_API = "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil"
+API_BASE = "https://servicebus2.caixa.gov.br/portaldeloterias/api/lotofacil"
 
 
-def _http_get_json(url: str, timeout: int = 30) -> Dict[str, Any]:
+@dataclass
+class Concurso:
+    numero: int
+    data: str  # normalmente vem "dd/mm/aaaa"
+    dezenas: List[int]
+
+
+def _get_json(url: str, timeout: int = 30) -> Dict[str, Any]:
     headers = {
-        # headers “de navegador” ajudam quando o servidor é mais restritivo
-        "User-Agent": (
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
-        ),
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        "Referer": "https://loterias.caixa.gov.br/",
-        "Origin": "https://loterias.caixa.gov.br",
-        "Connection": "keep-alive",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Wizard Lotofacil Diario)"
     }
     r = requests.get(url, headers=headers, timeout=timeout)
-    # Se o host bloquear (401/403), isso vai aparecer aqui
     r.raise_for_status()
     return r.json()
 
 
-def _fetch_concurso(api_base: str, concurso: Optional[int] = None) -> Dict[str, Any]:
-    """
-    Tenta:
-      - {api_base}                  (último concurso)
-      - {api_base}/{concurso}       (concurso específico)
-    """
-    if concurso is None:
-        return _http_get_json(api_base)
+def _extrair_numero_concurso(payload: Dict[str, Any]) -> Optional[int]:
+    # chaves mais comuns
+    for k in ("numero", "numeroConcurso", "concurso", "nr_concurso"):
+        v = payload.get(k)
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str) and v.strip().isdigit():
+            return int(v.strip())
+    return None
 
-    # alguns ambientes aceitam /{n}, outros aceitam ?concurso={n}
-    try_urls = [
-        f"{api_base}/{concurso}",
-        f"{api_base}?concurso={concurso}",
-    ]
-    last_err = None
-    for u in try_urls:
+
+def _extrair_data(payload: Dict[str, Any]) -> str:
+    for k in ("dataApuracao", "data", "dtApuracao", "dataStr"):
+        v = payload.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return ""
+
+
+def _extrair_dezenas(payload: Dict[str, Any]) -> List[int]:
+    # servicebus2 costuma trazer dezenas como strings ["01","02",...]
+    candidatos = []
+    for k in ("listaDezenas", "listaDezenasOrdemSorteio", "dezenas", "resultado"):
+        v = payload.get(k)
+        if isinstance(v, list) and v:
+            candidatos = v
+            break
+        if isinstance(v, str) and v.strip():
+            # às vezes vem "01-02-03-..."
+            if "-" in v:
+                candidatos = v.split("-")
+                break
+
+    dezenas: List[int] = []
+    for x in candidatos:
         try:
-            return _http_get_json(u)
-        except Exception as e:
-            last_err = e
-    raise RuntimeError(f"Falha ao buscar concurso {concurso}. Último erro: {last_err}")
-
-
-def _normalize_dezenas(payload: Dict[str, Any]) -> List[int]:
-    """
-    A API costuma trazer 'listaDezenas' como strings ["01","02",...]
-    """
-    dezenas = payload.get("listaDezenas") or payload.get("dezenas") or payload.get("lista_dezenas")
-    if not dezenas:
-        return []
-    out: List[int] = []
-    for d in dezenas:
-        try:
-            out.append(int(str(d).strip()))
+            dezenas.append(int(str(x).strip()))
         except Exception:
             pass
-    return out
+
+    dezenas = [d for d in dezenas if 1 <= d <= 25]
+    dezenas = sorted(dezenas)
+    return dezenas
 
 
-def _row_from_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    n = payload.get("numero") or payload.get("concurso") or payload.get("numeroConcurso")
-    if n is None:
-        return None
+def _buscar_concurso(n: int) -> Concurso:
+    payload = _get_json(f"{API_BASE}/{n}")
+    numero = _extrair_numero_concurso(payload) or n
+    data = _extrair_data(payload)
+    dezenas = _extrair_dezenas(payload)
 
-    dezenas = _normalize_dezenas(payload)
     if len(dezenas) != 15:
-        return None
+        raise ValueError(
+            f"Concurso {n}: esperado 15 dezenas, veio {len(dezenas)} -> {dezenas}. "
+            "A API retornou um formato inesperado."
+        )
 
-    data = payload.get("dataApuracao") or payload.get("data") or payload.get("dataSorteio")
-    # tenta padronizar data
-    dt = None
-    if data:
-        for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
-            try:
-                dt = datetime.strptime(str(data)[:10], fmt).strftime("%d-%m-%Y")
-                break
-            except Exception:
-                continue
-
-    row: Dict[str, Any] = {"Concurso": int(n), "Data": dt or ""}
-    dezenas_sorted = sorted(dezenas)
-    for i, dez in enumerate(dezenas_sorted, start=1):
-        row[f"D{i}"] = int(dez)
-    return row
+    return Concurso(numero=numero, data=data, dezenas=dezenas)
 
 
-def _load_existing(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        return pd.DataFrame(columns=["Concurso", "Data"] + [f"D{i}" for i in range(1, 16)])
-    df = pd.read_excel(path)
-    # normaliza nomes de colunas
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
+def _buscar_ultimo_concurso() -> int:
+    payload = _get_json(API_BASE)
+    ultimo = _extrair_numero_concurso(payload)
+    if not ultimo:
+        raise ValueError("Não consegui identificar o número do último concurso na API.")
+    return int(ultimo)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ultimos", type=int, default=1000, help="Quantos últimos concursos manter")
-    ap.add_argument(
-        "--api",
-        default=os.getenv("LOTOFACIL_API_URL", DEFAULT_API),
-        help="Endpoint da API (pode sobrescrever via env LOTOFACIL_API_URL)",
-    )
+    ap.add_argument("--ultimos", type=int, default=1000, help="Quantos concursos mais recentes baixar")
+    ap.add_argument("--out", type=str, default="base/base_dados_atualizada.xlsx", help="Caminho do XLSX de saída")
     args = ap.parse_args()
 
-    df_old = _load_existing(ARQ_ATUALIZADA)
-    last_old = int(df_old["Concurso"].max()) if (not df_old.empty and pd.notna(df_old["Concurso"]).any()) else 0
+    ultimos = max(1, int(args.ultimos))
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"📦 Base atual em disco: {ARQ_ATUALIZADA} (ultimo concurso = {last_old})")
+    print(f"🔎 Consultando último concurso via API: {API_BASE}")
+    ultimo = _buscar_ultimo_concurso()
+    inicio = max(1, ultimo - ultimos + 1)
 
-    # 1) tenta descobrir o último concurso online
-    try:
-        payload_last = _fetch_concurso(args.api, None)
-        row_last = _row_from_payload(payload_last)
-        if not row_last:
-            raise RuntimeError("Não consegui ler o último concurso (payload sem dezenas).")
-        last_online = int(row_last["Concurso"])
-        print(f"🌐 Último concurso online detectado: {last_online}")
-    except Exception as e:
-        print("⚠️ Falha ao acessar a API da CAIXA/endpoint.")
-        print(f"⚠️ Motivo: {e}")
-        print("✅ Vou manter a base existente (não vou sobrescrever).")
-        return 0
+    print(f"📌 Último concurso: {ultimo}")
+    print(f"📥 Baixando concursos de {inicio} até {ultimo} (total ~{ultimo - inicio + 1})")
 
-    # 2) define intervalo pra buscar
-    start = max(1, last_online - args.ultimos + 1)
-    # se já temos parte local, podemos buscar só o “delta”
-    if last_old >= start:
-        start = last_old + 1
+    concursos: List[Concurso] = []
+    erros: List[str] = []
 
-    new_rows: List[Dict[str, Any]] = []
-    if start <= last_online:
-        print(f"⬇️ Baixando concursos {start}..{last_online} (delta)")
-        for n in range(start, last_online + 1):
-            try:
-                payload = _fetch_concurso(args.api, n)
-                row = _row_from_payload(payload)
-                if row:
-                    new_rows.append(row)
-            except Exception as e:
-                # não quebra geral: loga e continua
-                print(f"⚠️ Falhou concurso {n}: {e}")
+    for n in range(inicio, ultimo + 1):
+        try:
+            c = _buscar_concurso(n)
+            concursos.append(c)
+        except Exception as e:
+            erros.append(f"{n}: {e}")
 
-    # 3) monta DF final
-    if new_rows:
-        df_new = pd.DataFrame(new_rows)
-        df = pd.concat([df_old, df_new], ignore_index=True)
-    else:
-        df = df_old.copy()
-
-    # remove duplicados, ordena
-    if "Concurso" in df.columns:
-        df = df.drop_duplicates(subset=["Concurso"]).sort_values("Concurso").reset_index(drop=True)
-
-    # sanity check: precisa ter pelo menos algumas linhas e D1..D15
-    need_cols = ["Concurso", "Data"] + [f"D{i}" for i in range(1, 16)]
-    for c in need_cols:
-        if c not in df.columns:
-            df[c] = ""
-
-    # se ficou vazio, NÃO sobrescreve
-    if df.empty or df["Concurso"].dropna().shape[0] == 0:
-        print("❌ A base ficou vazia (0 concursos). Não vou sobrescrever o arquivo.")
+    if not concursos:
+        print("❌ Nenhum concurso foi baixado. Não vou sobrescrever sua base.")
+        if erros:
+            print("Erros (primeiros 10):")
+            for line in erros[:10]:
+                print(" -", line)
         return 1
 
-    # mantém só os últimos N
-    if args.ultimos > 0 and df.shape[0] > args.ultimos:
-        df = df.tail(args.ultimos).reset_index(drop=True)
+    # monta DataFrame no formato que o resto do projeto espera
+    rows = []
+    for c in concursos:
+        row = {"Concurso": c.numero, "Data": c.data}
+        # D1..D15
+        for i, dez in enumerate(sorted(c.dezenas), start=1):
+            row[f"D{i}"] = int(dez)
+        rows.append(row)
 
-    # salva
-    df.to_excel(ARQ_ATUALIZADA, index=False)
-    print(f"✅ Base atualizada salva em: {ARQ_ATUALIZADA}")
-    print(f"✅ Total de concursos no arquivo: {df.shape[0]}")
-    print(f"✅ Último concurso no arquivo: {int(df['Concurso'].max())}")
+    df = pd.DataFrame(rows)
+    df = df.sort_values("Concurso").drop_duplicates(subset=["Concurso"], keep="last").reset_index(drop=True)
+
+    # validações finais
+    faltando = [col for col in ["Concurso"] + [f"D{i}" for i in range(1, 16)] if col not in df.columns]
+    if faltando:
+        print("❌ Estrutura inesperada ao montar DataFrame. Faltando colunas:", faltando)
+        return 1
+
+    if df["Concurso"].isna().all():
+        print("❌ Coluna Concurso ficou vazia (NaN). Abortando.")
+        return 1
+
+    print(f"✅ Concursos carregados: {len(df)} | Primeiro: {df['Concurso'].min()} | Último: {df['Concurso'].max()}")
+    df.to_excel(out_path, index=False)
+
+    print(f"✅ Base atualizada salva em: {out_path.as_posix()}")
+
+    if erros:
+        print(f"⚠️ Atenção: {len(erros)} concursos falharam (mantive os que deram certo). Exibindo primeiros 10:")
+        for line in erros[:10]:
+            print(" -", line)
+
     return 0
 
 
