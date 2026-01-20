@@ -1,54 +1,67 @@
+# scripts/dashboard.py
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
 import pandas as pd
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Gera CSVs de dashboard (resumo + distribuição).")
-    ap.add_argument("--agressivo", required=True, help="CSV backtest agressivo")
-    ap.add_argument("--conservador", required=True, help="CSV backtest conservador")
-    ap.add_argument("--out-resumo", required=True, help="CSV resumo geral")
-    ap.add_argument("--out-dist", required=True, help="CSV distribuição de acertos")
+def _load(path: str) -> pd.DataFrame:
+    p = Path(path)
+    if not p.exists():
+        raise SystemExit(f"Arquivo não encontrado: {p}")
+    df = pd.read_csv(p)
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
+
+
+def _summary(modo: str, df: pd.DataFrame) -> dict:
+    # espera colunas do backtest: jogo, media_acertos, max_acertos, min_acertos, ...
+    if "media_acertos" not in df.columns:
+        raise SystemExit(f"CSV de backtest sem coluna 'media_acertos'. Colunas: {list(df.columns)}")
+
+    return {
+        "modo": modo,
+        "jogos_avaliados": int(df["jogo"].nunique()) if "jogo" in df.columns else int(len(df)),
+        "media_acertos": float(df["media_acertos"].mean()),
+        "mediana_acertos": float(df["media_acertos"].median()),
+        "max_acertos": int(df["max_acertos"].max()) if "max_acertos" in df.columns else None,
+        "min_acertos": int(df["min_acertos"].min()) if "min_acertos" in df.columns else None,
+    }
+
+
+def _dist_max(modo: str, df: pd.DataFrame) -> pd.DataFrame:
+    # Distribuição do "max_acertos" por jogo (útil pra ver potencial do conjunto)
+    if "max_acertos" not in df.columns:
+        return pd.DataFrame(columns=["modo", "max_acertos", "qtd"])
+    c = df["max_acertos"].value_counts().sort_index()
+    out = pd.DataFrame({"max_acertos": c.index.astype(int), "qtd": c.values.astype(int)})
+    out.insert(0, "modo", modo)
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--agressivo", required=True)
+    ap.add_argument("--conservador", required=True)
+    ap.add_argument("--out-resumo", required=True)
+    ap.add_argument("--out-dist", required=True)
     args = ap.parse_args()
 
-    a = pd.read_csv(args.agressivo)
-    c = pd.read_csv(args.conservador)
+    df_a = _load(args.agressivo)
+    df_c = _load(args.conservador)
 
-    def resumo(df: pd.DataFrame, modo: str) -> dict:
-        return {
-            "modo": modo,
-            "jogos_avaliados": int(len(df)),
-            "media_acertos": float(df["media_acertos"].mean()),
-            "mediana_acertos": float(df["media_acertos"].median()),
-            "max_acertos": int(df["max_acertos"].max()),
-            "min_acertos": int(df["max_acertos"].min()),
-        }
+    resumo = pd.DataFrame([_summary("agressivo", df_a), _summary("conservador", df_c)])
+    dist = pd.concat([_dist_max("agressivo", df_a), _dist_max("conservador", df_c)], ignore_index=True)
 
-    df_resumo = pd.DataFrame([resumo(a, "agressivo"), resumo(c, "conservador")])
-    out_resumo = Path(args.out_resumo)
-    out_resumo.parent.mkdir(parents=True, exist_ok=True)
-    df_resumo.to_csv(out_resumo, index=False)
+    Path(args.out_resumo).parent.mkdir(parents=True, exist_ok=True)
+    resumo.to_csv(args.out_resumo, index=False)
+    dist.to_csv(args.out_dist, index=False)
 
-    # distribuição do max_acertos (quantos jogos atingiram 11, 12, 13 etc)
-    dist_a = a["max_acertos"].value_counts().sort_index().reset_index()
-    dist_a.columns = ["max_acertos", "qtd"]
-    dist_a.insert(0, "modo", "agressivo")
-
-    dist_c = c["max_acertos"].value_counts().sort_index().reset_index()
-    dist_c.columns = ["max_acertos", "qtd"]
-    dist_c.insert(0, "modo", "conservador")
-
-    df_dist = pd.concat([dist_a, dist_c], ignore_index=True)
-    out_dist = Path(args.out_dist)
-    out_dist.parent.mkdir(parents=True, exist_ok=True)
-    df_dist.to_csv(out_dist, index=False)
-
-    print(f"✅ dashboard resumo: {out_resumo}")
-    print(f"✅ dashboard dist:   {out_dist}")
+    print(f"✅ Dashboard resumo: {args.out_resumo}")
+    print(f"✅ Dashboard dist:   {args.out_dist}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
