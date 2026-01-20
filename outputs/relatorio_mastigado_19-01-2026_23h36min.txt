@@ -1,0 +1,31 @@
+==============================================
+        RELATÓRIO MASTIGADO DO WIZARD
+        DATA: 19-01-2026
+==============================================
+
+---- BACKTEST (AGRESSIVO) ----
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    1          10.05           12            6     8     3     0     0     0
+    2          10.05           14            8     5     1     1     1     0
+    3          10.00           12            6     7     2     0     0     0
+    4           9.95           12            8     3     3     0     0     0
+    5           9.90           11            7     8     0     0     0     0
+
+---- BACKTEST (CONSERVADOR) ----
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    1          10.05           12            8     7     2     0     0     0
+    2          10.05           12            6     7     3     0     0     0
+    3           9.95           13            7     6     1     1     0     0
+    4           9.95           12            7     7     2     0     0     0
+    5           9.90           12            8     3     3     0     0     0
+
+==============================================
+MELHORES DO DIA (por média e máximo)
+==============================================
+Agressivo → jogo 2 | média=10.05 | max=14 | min=8
+Conservador → jogo 1 | média=10.05 | max=12 | min=8
+
+RECOMENDAÇÃO (simples e prática):
+✔ Se for apostar 1 jogo: use o melhor do AGRESSIVO (maior explosão).
+✔ Se for apostar 2–3 jogos: melhor AGRESSIVO + melhor CONSERVADOR + (opcional) o 2º melhor do conservador.
+✔ Se quiser estabilidade: priorize o CONSERVADOR com maior min_acertos.

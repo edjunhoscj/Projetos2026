@@ -1,41 +1,68 @@
-============================================================
-ANÁLISE BASE (últimos 200 concursos do arquivo)
-Arquivo: base/base_limpa.xlsx
-Concurso: 3391 .. 3590
-============================================================
+==============================================
+ANÁLISE DA BASE — LOTOFÁCIL
+==============================================
+Concursos na base: 1000 | Último concurso: 3591
+Janela recente: últimos 200 concursos
 
-SOMA das dezenas:
-  mediana: 195 | p5: 165 | p95: 220
+---- TOP 10 frequência (base inteira) ----
+25: 634
+20: 630
+01: 627
+10: 624
+12: 614
+04: 613
+02: 608
+15: 606
+22: 604
+11: 603
 
-ÍMPARES por jogo:
-  mediana: 8 | p5: 6 | p95: 10
+---- TOP 10 frequência (janela recente) ----
+12: 128
+15: 128
+01: 127
+13: 126
+17: 126
+04: 125
+07: 124
+25: 124
+22: 123
+02: 122
 
-CONSECUTIVOS (pares adjacentes dentro do jogo):
-  mediana: 8 | p5: 7 | p95: 10
+---- BOTTOM 10 (menos saíram na janela recente) ----
+08: 110
+10: 111
+09: 112
+20: 113
+05: 114
+18: 114
+14: 117
+23: 117
+24: 118
+03: 119
 
-REPETIÇÃO com o concurso anterior:
-  mediana: 9 | p5: 7 | p95: 11
-  distribuição (qtde -> ocorrências):
-     6 -> 4
-     7 -> 17
-     8 -> 52
-     9 -> 68
-    10 -> 33
-    11 -> 22
-    12 -> 3
+---- Estatísticas gerais (base inteira) ----
+pares_med   : 7.22
+pares_min   : 4.00
+pares_max   : 11.00
+soma_med    : 194.51
+soma_min    : 147.00
+soma_max    : 257.00
+q20_25_med  : 3.62
+q20_25_min  : 1.00
+q20_25_max  : 6.00
 
-DISTRIBUIÇÃO por LINHAS (1-5, 6-10, 11-15, 16-20, 21-25):
-  médias: [3.025, 2.885, 3.105, 2.965, 3.02]
-  p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 4.0, 5.0, 4.0, 5.0]
+---- Estatísticas (janela recente) ----
+pares_med   : 7.10
+pares_min   : 4.00
+pares_max   : 10.00
+soma_med    : 194.81
+soma_min    : 150.00
+soma_max    : 246.00
+q20_25_med  : 3.57
+q20_25_min  : 1.00
+q20_25_max  : 6.00
 
-DISTRIBUIÇÃO por COLUNAS (1/6/11/16/21 ...):
-  médias: [3.045, 3.115, 2.92, 2.965, 2.955]
-  p5: [1.0, 1.0, 1.0, 1.0, 1.0] | p95: [5.0, 5.0, 5.0, 5.0, 4.0]
-
-Sugestão de filtros/penalizações (com base nesses ranges):
-  - ímpares: 6 a 9 (ideal 7–8)
-  - soma: p5..p95
-  - repetição com último concurso: p5..p95
-  - consecutivos: p5..p95
-  - linhas/colunas: evitar extremos (muito 0 ou muito 5)
-============================================================
+Interpretação rápida:
+- q20_25_med: média de quantas dezenas entre 20 e 25 aparecem por concurso.
+- pares_med: média de pares por concurso (normalmente perto de 7-8).
+- soma_med: soma média das 15 dezenas (serve para manter jogos “plausíveis”).
