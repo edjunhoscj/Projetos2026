@@ -3,69 +3,93 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import pandas as pd
 
-def _read_optional(path: str | None) -> str:
-    if not path:
-        return ""
-    p = Path(path)
-    if not p.exists():
-        return f"(arquivo não encontrado: {p})\n"
-    return p.read_text(encoding="utf-8", errors="ignore").strip() + "\n"
+
+def _safe_read_text(path: Path) -> str:
+    if not path.exists():
+        return f"[ARQUIVO NÃO ENCONTRADO: {path}]"
+    txt = path.read_text(encoding="utf-8", errors="ignore")
+    # detecta ponteiro git-lfs
+    if txt.strip().startswith("version https://git-lfs.github.com/spec/v1"):
+        return (
+            "⚠️ ESTE ARQUIVO APARECE COMO PONTEIRO DO GIT-LFS (não é o conteúdo real).\n"
+            "Isso acontece quando o CSV foi trackeado por LFS.\n"
+            "Solução: tirar esse arquivo do LFS ou baixar o artefato real.\n\n"
+            + txt
+        )
+    return txt
+
+
+def _safe_read_csv(path: Path) -> str:
+    if not path.exists():
+        return f"[CSV NÃO ENCONTRADO: {path}]"
+    try:
+        df = pd.read_csv(path)
+        return df.to_string(index=False)
+    except Exception as e:
+        return f"[ERRO LENDO CSV {path}: {e}]"
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="", help="Data do relatório")
-    ap.add_argument("--jogos-ag", required=True, help="TXT jogos agressivo (timestamp)")
-    ap.add_argument("--jogos-cons", required=True, help="TXT jogos conservador (timestamp)")
-    ap.add_argument("--bt-ag-txt", default=None, help="TXT backtest agressivo")
-    ap.add_argument("--bt-cons-txt", default=None, help="TXT backtest conservador")
-    ap.add_argument("--dash-resumo", default=None, help="CSV resumo do dashboard (opcional)")
-    ap.add_argument("--dash-dist", default=None, help="CSV distribuição do dashboard (opcional)")
-    ap.add_argument("--out", required=True, help="TXT final do relatório completo")
+    ap = argparse.ArgumentParser(description="Monta um relatório completo TXT único.")
+    ap.add_argument("--data", required=True, help="Data DD-MM-YYYY")
+    ap.add_argument("--jogos-ag", required=True)
+    ap.add_argument("--jogos-cons", required=True)
+    ap.add_argument("--bt-ag-txt", required=True)
+    ap.add_argument("--bt-cons-txt", required=True)
+    ap.add_argument("--dash-resumo", required=True)
+    ap.add_argument("--dash-dist", required=True)
+    ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    header = []
-    header.append("=" * 46)
-    header.append("RELATÓRIO COMPLETO DO WIZARD")
-    if args.data:
-        header.append(f"DATA: {args.data}")
-    header.append("=" * 46)
-    header.append("")
+    lines = []
+    lines.append("==============================================")
+    lines.append("RELATÓRIO COMPLETO DO WIZARD")
+    lines.append(f"DATA: {args.data}")
+    lines.append("==============================================\n")
 
-    sections = []
+    lines.append("------------ BACKTEST — MODO AGRESSIVO ------------")
+    lines.append(_safe_read_text(Path(args.bt_ag_txt)))
+    lines.append("\n------------ BACKTEST — MODO CONSERVADOR ------------")
+    lines.append(_safe_read_text(Path(args.bt_cons_txt)))
 
-    sections.append("------------ BACKTEST — MODO AGRESSIVO ------------\n" + _read_optional(args.bt_ag_txt))
-    sections.append("------------ BACKTEST — MODO CONSERVADOR ------------\n" + _read_optional(args.bt_cons_txt))
+    lines.append("\n------------ DASHBOARD — RESUMO GERAL (CSV) ------------")
+    lines.append(_safe_read_csv(Path(args.dash_resumo)))
+    lines.append("\n------------ DISTRIBUIÇÃO DE ACERTOS (CSV) ------------")
+    lines.append(_safe_read_csv(Path(args.dash_dist)))
 
-    # dashboard csv (quando existir)
-    dash_resumo = _read_optional(args.dash_resumo)
-    dash_dist = _read_optional(args.dash_dist)
+    lines.append("\n------------ JOGOS GERADOS — AGRESSIVO ------------")
+    lines.append(_safe_read_text(Path(args.jogos_ag)))
+    lines.append("\n------------ JOGOS GERADOS — CONSERVADOR ------------")
+    lines.append(_safe_read_text(Path(args.jogos_cons)))
 
-    if dash_resumo.strip():
-        sections.append("------------ DASHBOARD — RESUMO GERAL (CSV) ------------\n" + dash_resumo)
+    # interpretação: pega melhores do CSV do backtest agressivo (se existir)
+    try:
+        # tenta achar CSV irmão do TXT
+        bt_ag_csv = Path(args.bt_ag_txt).with_suffix(".csv")
+        if bt_ag_csv.exists():
+            df = pd.read_csv(bt_ag_csv).sort_values(["media_acertos", "max_acertos"], ascending=[False, False])
+            best = df.iloc[0]
+            lines.append("\n============ INTERPRETAÇÃO DO MELHOR DO DIA ============")
+            lines.append(f"Melhor jogo do modo agressivo: jogo {best['jogo']}")
+            lines.append(f"Média: {float(best['media_acertos']):.2f}")
+            lines.append(f"Máximo atingido: {best['max_acertos']}")
+            lines.append(f"Mínimo atingido: {best['min_acertos']}")
+    except Exception:
+        pass
 
-    if dash_dist.strip():
-        sections.append("------------ DISTRIBUIÇÃO DE ACERTOS (CSV) ------------\n" + dash_dist)
+    lines.append("\n============ RECOMENDAÇÃO FINAL ============")
+    lines.append("✔ Use o melhor jogo do agressivo para explosão")
+    lines.append("✔ Combine com o mais estável do conservador")
+    lines.append("✔ Para apostar só 1 jogo: use o melhor agressivo")
+    lines.append("✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio")
 
-    sections.append("------------ JOGOS GERADOS — AGRESSIVO ------------\n" + _read_optional(args.jogos_ag))
-    sections.append("------------ JOGOS GERADOS — CONSERVADOR ------------\n" + _read_optional(args.jogos_cons))
-
-    # interpretação simples (texto) — você pode evoluir depois
-    sections.append(
-        "============ RECOMENDAÇÃO FINAL ============\n"
-        "✔ Use o melhor jogo do agressivo para explosão\n"
-        "✔ Combine com o mais estável do conservador\n"
-        "✔ Para apostar só 1 jogo: use o melhor agressivo\n"
-        "✔ Para 3 jogos: melhor agressivo + mais estável conservador + melhor equilíbrio\n"
-    )
-
-    txt = "\n".join(header) + "\n".join(sections).strip() + "\n"
-    out.write_text(txt, encoding="utf-8")
-    print(f"OK - Relatório completo gerado: {out}")
+    out.write_text("\n".join(lines), encoding="utf-8")
+    print(f"✅ Relatório completo salvo: {out}")
 
 
 if __name__ == "__main__":
