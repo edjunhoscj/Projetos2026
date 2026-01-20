@@ -2,7 +2,7 @@ name: Wizard Lotofacil Diário
 
 on:
   schedule:
-    # 18:00 em Brasília (UTC-3) => 21:00 UTC
+    # 18:00 em Brasília (UTC-3) => 21:00 UTC, de segunda a sexta
     - cron: "0 21 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -23,6 +23,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) Checkout + Python + deps
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -33,18 +34,22 @@ jobs:
 
       - name: Instalar dependencias
         run: |
+          set -e
           python -V
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 2) Pastas + Timestamp (Brasil)
       - name: Preparar outputs
         run: |
+          set -e
           mkdir -p outputs
           touch outputs/.gitkeep
 
       - name: Definir timestamp (America/Sao_Paulo)
         id: ts
         run: |
+          set -e
           TS=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y_%Hh%Mmin')
           DATA=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y')
           echo "TS=$TS" >> $GITHUB_OUTPUT
@@ -54,59 +59,85 @@ jobs:
 
       - name: Definir inputs (ultimos/finais)
         run: |
+          set -e
           ULTIMOS="${{ github.event.inputs.ultimos || '20' }}"
           FINAIS="${{ github.event.inputs.finais || '5' }}"
           echo "ULTIMOS=$ULTIMOS" >> $GITHUB_ENV
           echo "FINAIS=$FINAIS" >> $GITHUB_ENV
           echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS"
 
-      # -----------------------------
-      # 0) (Opcional) Atualizar base / gerar insumos
-      # -----------------------------
+      # 3) Atualiza base / gera insumos
       - name: Atualizar base da Caixa (últimos 1000)
-        run: python scripts/atualizar_base.py --ultimos 1000
+        run: |
+          set -e
+          python scripts/atualizar_base.py --ultimos 1000
 
       - name: Gerar base limpa
-        run: python scripts/gerar_base_limpa.py
+        run: |
+          set -e
+          python scripts/gerar_base_limpa.py
 
       - name: Analisar base (padrões)
         run: |
+          set -e
           python scripts/analise_base.py --base base/base_limpa.xlsx --ultimos 200 > outputs/analise_base.txt
 
       - name: Gerar combinações inteligentes
-        run: python scripts/gerar_combinacoes.py
+        run: |
+          set -e
+          python scripts/gerar_combinacoes.py
+
+      # 3.1) Garantir compatibilidade TXT/CSV (evita “mismatch”)
+      - name: Garantir combinacoes_inteligentes.csv
+        run: |
+          set -e
+          if [ -f "combinacoes/combinacoes_inteligentes.csv" ]; then
+            echo "OK: combinacoes_inteligentes.csv existe."
+          elif [ -f "combinacoes/combinacoes_inteligentes.txt" ]; then
+            echo "CSV não existe, mas TXT existe. Criando CSV a partir do TXT..."
+            cp "combinacoes/combinacoes_inteligentes.txt" "combinacoes/combinacoes_inteligentes.csv"
+          else
+            echo "ERRO: não achei combinacoes_inteligentes.csv nem combinacoes_inteligentes.txt"
+            echo "Conteúdo da pasta combinacoes/:"
+            ls -la combinacoes || true
+            exit 1
+          fi
 
       - name: Debug - combinacoes geradas
         run: |
-          echo "LINHAS (combinacoes_inteligentes.txt):"
-          wc -l combinacoes/combinacoes_inteligentes.txt || true
+          set -e
+          echo "Arquivos em combinacoes/:"
+          ls -la combinacoes || true
+          echo "LINHAS (csv):"
+          wc -l combinacoes/combinacoes_inteligentes.csv || true
           echo "HEAD:"
-          head -n 5 combinacoes/combinacoes_inteligentes.txt || true
+          head -n 5 combinacoes/combinacoes_inteligentes.csv || true
 
-
-      # -----------------------------
-      # 1) GERAR JOGOS (TXT)
-      # -----------------------------
+      # 4) Gerar jogos (TXT)
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
         run: |
+          set -e
           echo "Modo agressivo..."
           python wizard_cli.py --modo agressivo --ultimos "$ULTIMOS" --finais "$FINAIS" \
             | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
 
       - name: Criar atalho fixo - AGRESSIVO
         run: |
+          set -e
           ULTIMO=$(ls -t outputs/jogos_agressivo_*.txt | head -n 1)
           cp "$ULTIMO" outputs/jogos_agressivo.txt
           echo "Atalho agressivo -> $ULTIMO"
 
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
         run: |
+          set -e
           echo "Modo conservador..."
           python wizard_cli.py --modo conservador --ultimos "$ULTIMOS" --finais "$FINAIS" \
             | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
 
       - name: Criar atalho fixo - CONSERVADOR
         run: |
+          set -e
           ULTIMO=$(ls -t outputs/jogos_conservador_*.txt | head -n 1)
           cp "$ULTIMO" outputs/jogos_conservador.txt
           echo "Atalho conservador -> $ULTIMO"
@@ -126,11 +157,10 @@ jobs:
 
           echo "OK: ambos TXT tem pelo menos 1 linha com 15 dezenas."
 
-      # -----------------------------
-      # 2) BACKTEST (CSV + TXT)
-      # -----------------------------
+      # 5) Backtest (CSV + TXT)
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
+          set -e
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_agressivo.txt" \
             --base "base/base_limpa.xlsx" \
@@ -144,6 +174,7 @@ jobs:
 
       - name: Backtest - CONSERVADOR (CSV + TXT)
         run: |
+          set -e
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_conservador.txt" \
             --base "base/base_limpa.xlsx" \
@@ -155,33 +186,30 @@ jobs:
           cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_conservador.csv" || true
           cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt" || true
 
-      # -----------------------------
-      # 3) DASHBOARD (PNG + CSV)
-      # -----------------------------
+      # 6) Dashboard
       - name: Gerar dashboard (PNG + CSV)
         run: |
+          set -e
           python scripts/dashboard.py \
             --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
             --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
             --out-resumo "outputs/dashboard_resumo_geral.csv" \
             --out-dist "outputs/dashboard_distribuicao_acertos.csv"
 
-      # -----------------------------
-      # 4) RELATORIO MASTIGADO (TXT)
-      # -----------------------------
+      # 7) Relatório mastigado
       - name: Gerar relatorio mastigado (TXT)
         run: |
+          set -e
           python scripts/relatorio_mastigado.py \
             --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
             --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
             --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
             --data "${{ steps.ts.outputs.DATA }}"
 
-      # -----------------------------
-      # 5) RELATORIO COMPLETO (TXT UNICO)
-      # -----------------------------
+      # 8) Relatório completo
       - name: Gerar relatorio completo (TXT)
         run: |
+          set -e
           python scripts/gerar_relatorio_completo.py \
             --data "${{ steps.ts.outputs.DATA }}" \
             --jogos-ag "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
@@ -192,13 +220,24 @@ jobs:
             --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
             --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
 
-      # -----------------------------
-      # 6) COMMIT / PUSH
-      # -----------------------------
+      # 9) Commit / Push (robusto)
       - name: Commit e push dos resultados
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f outputs base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
-          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + dashboard + relatorios)" || echo "Nada para commitar"
-          git push
+
+          git add -f outputs/ || true
+          git add -f base/base_limpa.xlsx || true
+          git add -f base/base_dados_atualizada.xlsx || true
+
+          if git diff --cached --quiet; then
+            echo "Nada para commitar."
+            exit 0
+          fi
+
+          git commit -m "Atualizacao diaria Wizard Lotofacil (jogos + backtest + dashboard + relatorios)"
+
+          # evita falha caso o branch tenha mudado entre runs
+          git pull --rebase origin main || true
+          git push origin main
