@@ -1,129 +1,108 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 from pathlib import Path
-from collections import Counter
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 
 
-def _cols_dezenas() -> list[str]:
-    return [f"D{i}" for i in range(1, 16)]
+@dataclass
+class Resumo:
+    freq: Dict[int, int]
 
 
-def _consecutivos(q: list[int]) -> int:
-    r = sorted(q)
-    return sum(1 for a, b in zip(r, r[1:]) if b == a + 1)
+def _extrair(df: pd.DataFrame) -> np.ndarray:
+    cols = [f"D{i}" for i in range(1, 16)]
+    return df[cols].to_numpy(dtype=int, copy=True)
 
 
-def _row_bins() -> list[set[int]]:
-    return [
-        set(range(1, 6)),
-        set(range(6, 11)),
-        set(range(11, 16)),
-        set(range(16, 21)),
-        set(range(21, 26)),
-    ]
-
-
-def _col_bins() -> list[set[int]]:
-    return [
-        {1, 6, 11, 16, 21},
-        {2, 7, 12, 17, 22},
-        {3, 8, 13, 18, 23},
-        {4, 9, 14, 19, 24},
-        {5, 10, 15, 20, 25},
-    ]
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--base", default="base/base_limpa.xlsx", help="Caminho do base_limpa.xlsx")
-    ap.add_argument("--ultimos", type=int, default=200, help="Quantos concursos finais analisar")
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Analisa padrões na base Lotofácil.")
+    ap.add_argument("--base", required=True, help="Arquivo base_limpa.xlsx")
+    ap.add_argument("--ultimos", type=int, default=200, help="Janela recência (default: 200)")
     args = ap.parse_args()
 
     base_path = Path(args.base)
     if not base_path.exists():
-        raise FileNotFoundError(f"Base não encontrada: {base_path}")
+        raise FileNotFoundError(base_path)
 
-    df = pd.read_excel(base_path).sort_values("Concurso")
-    cols = _cols_dezenas()
+    df = pd.read_excel(base_path)
+    cols = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
+    df = df[cols].copy().sort_values("Concurso").reset_index(drop=True)
 
-    if not all(c in df.columns for c in cols):
-        raise ValueError(f"Base não tem colunas D1..D15. Colunas: {list(df.columns)}")
+    ult = int(args.ultimos)
+    df_last = df.tail(ult).copy()
 
-    df_tail = df.tail(args.ultimos).copy()
-    arr = df_tail[cols].to_numpy(dtype=int)
+    arr_all = _extrair(df).flatten()
+    arr_last = _extrair(df_last).flatten()
 
-    sums = arr.sum(axis=1)
-    odd_counts = (arr % 2 == 1).sum(axis=1)
-    cons = np.array([_consecutivos(list(row)) for row in arr], dtype=int)
+    freq_all = {d: 0 for d in range(1, 26)}
+    freq_last = {d: 0 for d in range(1, 26)}
+    for x in arr_all:
+        freq_all[int(x)] += 1
+    for x in arr_last:
+        freq_last[int(x)] += 1
 
-    # repetição com concurso anterior (dentro do recorte)
-    reps = []
-    for i in range(1, len(arr)):
-        reps.append(len(set(arr[i - 1]) & set(arr[i])))
-    reps = np.array(reps, dtype=int) if reps else np.array([], dtype=int)
+    top_all = sorted(freq_all.items(), key=lambda x: x[1], reverse=True)[:10]
+    top_last = sorted(freq_last.items(), key=lambda x: x[1], reverse=True)[:10]
+    bot_last = sorted(freq_last.items(), key=lambda x: x[1])[:10]
 
-    # linhas/colunas
-    rb = _row_bins()
-    cb = _col_bins()
-    row_counts = []
-    col_counts = []
-    for row in arr:
-        s = set(row)
-        row_counts.append([len(s & b) for b in rb])
-        col_counts.append([len(s & b) for b in cb])
-    row_counts = np.array(row_counts, dtype=int)
-    col_counts = np.array(col_counts, dtype=int)
+    # paridade/soma/20-25
+    def estat_janela(dfx: pd.DataFrame) -> Dict[str, float]:
+        A = _extrair(dfx)
+        pares = np.sum(A % 2 == 0, axis=1)
+        soma = np.sum(A, axis=1)
+        qtd_20_25 = np.sum((A >= 20) & (A <= 25), axis=1)
+        return {
+            "pares_med": float(np.mean(pares)),
+            "pares_min": float(np.min(pares)),
+            "pares_max": float(np.max(pares)),
+            "soma_med": float(np.mean(soma)),
+            "soma_min": float(np.min(soma)),
+            "soma_max": float(np.max(soma)),
+            "q20_25_med": float(np.mean(qtd_20_25)),
+            "q20_25_min": float(np.min(qtd_20_25)),
+            "q20_25_max": float(np.max(qtd_20_25)),
+        }
 
-    def pct(x, p):  # percentil
-        return float(np.percentile(x, p)) if len(x) else float("nan")
+    e_all = estat_janela(df)
+    e_last = estat_janela(df_last)
 
-    print("=" * 60)
-    print(f"ANÁLISE BASE (últimos {args.ultimos} concursos do arquivo)")
-    print(f"Arquivo: {base_path}")
-    print(f"Concurso: {df_tail['Concurso'].min()} .. {df_tail['Concurso'].max()}")
-    print("=" * 60)
+    print("==============================================")
+    print("ANÁLISE DA BASE — LOTOFÁCIL")
+    print("==============================================")
+    print(f"Concursos na base: {len(df)} | Último concurso: {int(df['Concurso'].max())}")
+    print(f"Janela recente: últimos {ult} concursos")
+    print()
 
-    print("\nSOMA das dezenas:")
-    print(f"  mediana: {np.median(sums):.0f} | p5: {pct(sums,5):.0f} | p95: {pct(sums,95):.0f}")
+    print("---- TOP 10 frequência (base inteira) ----")
+    for d, f in top_all:
+        print(f"{d:02d}: {f}")
 
-    print("\nÍMPARES por jogo:")
-    print(f"  mediana: {np.median(odd_counts):.0f} | p5: {pct(odd_counts,5):.0f} | p95: {pct(odd_counts,95):.0f}")
+    print("\n---- TOP 10 frequência (janela recente) ----")
+    for d, f in top_last:
+        print(f"{d:02d}: {f}")
 
-    print("\nCONSECUTIVOS (pares adjacentes dentro do jogo):")
-    print(f"  mediana: {np.median(cons):.0f} | p5: {pct(cons,5):.0f} | p95: {pct(cons,95):.0f}")
+    print("\n---- BOTTOM 10 (menos saíram na janela recente) ----")
+    for d, f in bot_last:
+        print(f"{d:02d}: {f}")
 
-    if len(reps):
-        c = Counter(reps)
-        print("\nREPETIÇÃO com o concurso anterior:")
-        print(f"  mediana: {np.median(reps):.0f} | p5: {pct(reps,5):.0f} | p95: {pct(reps,95):.0f}")
-        print("  distribuição (qtde -> ocorrências):")
-        for k in sorted(c):
-            print(f"    {k:2d} -> {c[k]}")
-    else:
-        print("\nREPETIÇÃO: não calculado (poucos concursos no recorte).")
+    print("\n---- Estatísticas gerais (base inteira) ----")
+    for k, v in e_all.items():
+        print(f"{k:12s}: {v:.2f}")
 
-    print("\nDISTRIBUIÇÃO por LINHAS (1-5, 6-10, 11-15, 16-20, 21-25):")
-    print(f"  médias: {row_counts.mean(axis=0).round(3).tolist()}")
-    print(f"  p5: {np.percentile(row_counts,5,axis=0).tolist()} | p95: {np.percentile(row_counts,95,axis=0).tolist()}")
+    print("\n---- Estatísticas (janela recente) ----")
+    for k, v in e_last.items():
+        print(f"{k:12s}: {v:.2f}")
 
-    print("\nDISTRIBUIÇÃO por COLUNAS (1/6/11/16/21 ...):")
-    print(f"  médias: {col_counts.mean(axis=0).round(3).tolist()}")
-    print(f"  p5: {np.percentile(col_counts,5,axis=0).tolist()} | p95: {np.percentile(col_counts,95,axis=0).tolist()}")
-
-    print("\nSugestão de filtros/penalizações (com base nesses ranges):")
-    print("  - ímpares: 6 a 9 (ideal 7–8)")
-    print("  - soma: p5..p95")
-    print("  - repetição com último concurso: p5..p95")
-    print("  - consecutivos: p5..p95")
-    print("  - linhas/colunas: evitar extremos (muito 0 ou muito 5)")
-    print("=" * 60)
-    return 0
+    print("\nInterpretação rápida:")
+    print("- q20_25_med: média de quantas dezenas entre 20 e 25 aparecem por concurso.")
+    print("- pares_med: média de pares por concurso (normalmente perto de 7-8).")
+    print("- soma_med: soma média das 15 dezenas (serve para manter jogos “plausíveis”).")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
