@@ -184,7 +184,7 @@ def diversify(top: List[Tuple[float, Set[int]]], finais: int, max_sim: float) ->
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--modo", choices=["agressivo", "conservador"], required=True)
-    ap.add_argument("--ultimos", type=int, default=20)
+    ap.add_argument("--ultimos", type=int, default=300)
     ap.add_argument("--finais", type=int, default=5)
     ap.add_argument("--base", default="base/base_limpa.xlsx")
     ap.add_argument("--candidatos", type=int, default=80000, help="Qtde de jogos candidatos (amostragem)")
