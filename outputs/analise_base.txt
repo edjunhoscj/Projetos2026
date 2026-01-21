@@ -1,50 +1,50 @@
 ==============================================
 ANÁLISE DA BASE — LOTOFÁCIL
 ==============================================
-Concursos na base: 1000 | Último concurso: 3591
+Concursos na base: 1000 | Último concurso: 3592
 Janela recente: últimos 200 concursos
 
 ---- TOP 10 frequência (base inteira) ----
 25: 634
-20: 630
+20: 631
 01: 627
-10: 624
-12: 614
+10: 623
+12: 615
 04: 613
-02: 608
-15: 606
+02: 607
+15: 605
+13: 604
 22: 604
-11: 603
 
 ---- TOP 10 frequência (janela recente) ----
-12: 128
+12: 129
 15: 128
 01: 127
+04: 126
 13: 126
 17: 126
-04: 125
+25: 125
 07: 124
-25: 124
 22: 123
-02: 122
+02: 121
 
 ---- BOTTOM 10 (menos saíram na janela recente) ----
-08: 110
+08: 109
 10: 111
 09: 112
-20: 113
-05: 114
 18: 114
-14: 117
-23: 117
-24: 118
-03: 119
+20: 114
+05: 115
+14: 116
+24: 117
+03: 118
+23: 118
 
 ---- Estatísticas gerais (base inteira) ----
 pares_med   : 7.22
 pares_min   : 4.00
 pares_max   : 11.00
-soma_med    : 194.51
+soma_med    : 194.53
 soma_min    : 147.00
 soma_max    : 257.00
 q20_25_med  : 3.62
@@ -52,13 +52,13 @@ q20_25_min  : 1.00
 q20_25_max  : 6.00
 
 ---- Estatísticas (janela recente) ----
-pares_med   : 7.10
+pares_med   : 7.09
 pares_min   : 4.00
 pares_max   : 10.00
-soma_med    : 194.81
+soma_med    : 194.96
 soma_min    : 150.00
 soma_max    : 246.00
-q20_25_med  : 3.57
+q20_25_med  : 3.58
 q20_25_min  : 1.00
 q20_25_max  : 6.00
 
