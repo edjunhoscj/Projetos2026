@@ -2,67 +2,73 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-
 import pandas as pd
 
 
-def _best(df: pd.DataFrame):
-    df2 = df.sort_values(["media_acertos", "max_acertos"], ascending=[False, False]).reset_index(drop=True)
-    return df2.iloc[0]
+def ler_csv(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    for c in ["score_alvo", "score_13plus", "media_acertos", "max_acertos", "min_acertos"]:
+        if c not in df.columns:
+            df[c] = 0
+    return df
 
 
-def _fmt(df: pd.DataFrame) -> str:
-    return df.to_string(index=False)
+def top_alvo(df: pd.DataFrame, n: int = 5) -> pd.DataFrame:
+    return df.sort_values(
+        by=["score_alvo", "score_13plus", "max_acertos", "media_acertos"],
+        ascending=[False, False, False, False],
+    ).head(n)
+
+
+def fmt(df: pd.DataFrame) -> str:
+    cols = [
+        "jogo",
+        "media_acertos",
+        "max_acertos",
+        "min_acertos",
+        "11.0",
+        "12.0",
+        "13.0",
+        "14.0",
+        "15.0",
+        "score_alvo",
+        "score_13plus",
+    ]
+    cols = [c for c in cols if c in df.columns]
+    return df[cols].to_string(index=False)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Gera relatório mastigado (TXT) a partir dos CSVs de backtest.")
-    ap.add_argument("--agressivo", required=True, help="CSV agressivo")
-    ap.add_argument("--conservador", required=True, help="CSV conservador")
-    ap.add_argument("--out", required=True, help="TXT saída")
-    ap.add_argument("--data", default="", help="Data (DD-MM-YYYY)")
-    args = ap.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("--agressivo", required=True)
+    p.add_argument("--conservador", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--data", required=True)
+    args = p.parse_args()
 
-    ag = pd.read_csv(args.agressivo)
-    co = pd.read_csv(args.conservador)
+    ag = ler_csv(Path(args.agressivo))
+    co = ler_csv(Path(args.conservador))
 
-    best_ag = _best(ag)
-    best_co = _best(co)
+    out = []
+    out.append("==============================================")
+    out.append("RELATÓRIO MASTIGADO — FOCO EM 14/15")
+    out.append(f"DATA: {args.data}")
+    out.append("==============================================")
+    out.append("")
+    out.append("Ranking principal:")
+    out.append("score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)")
+    out.append("Desempate: 13+ > max > média")
+    out.append("")
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out.append("------------ TOP (AGRESSIVO) ------------")
+    out.append(fmt(top_alvo(ag, 5)))
+    out.append("")
+    out.append("------------ TOP (CONSERVADOR) ------------")
+    out.append(fmt(top_alvo(co, 5)))
+    out.append("")
 
-    lines = []
-    lines.append("==============================================")
-    lines.append("        RELATÓRIO MASTIGADO DO WIZARD")
-    if args.data:
-        lines.append(f"        DATA: {args.data}")
-    lines.append("==============================================\n")
-
-    lines.append("---- BACKTEST (AGRESSIVO) ----")
-    lines.append(_fmt(ag.sort_values("media_acertos", ascending=False)))
-    lines.append("\n---- BACKTEST (CONSERVADOR) ----")
-    lines.append(_fmt(co.sort_values("media_acertos", ascending=False)))
-
-    lines.append("\n==============================================")
-    lines.append("MELHORES DO DIA (por média e máximo)")
-    lines.append("==============================================")
-    lines.append(
-        f"Agressivo → jogo {int(best_ag['jogo'])} | média={float(best_ag['media_acertos']):.2f} | "
-        f"max={int(best_ag['max_acertos'])} | min={int(best_ag['min_acertos'])}"
-    )
-    lines.append(
-        f"Conservador → jogo {int(best_co['jogo'])} | média={float(best_co['media_acertos']):.2f} | "
-        f"max={int(best_co['max_acertos'])} | min={int(best_co['min_acertos'])}"
-    )
-
-    lines.append("\nRECOMENDAÇÃO (simples e prática):")
-    lines.append("✔ Se for apostar 1 jogo: use o melhor do AGRESSIVO (maior explosão).")
-    lines.append("✔ Se for apostar 2–3 jogos: melhor AGRESSIVO + melhor CONSERVADOR + (opcional) o 2º melhor do conservador.")
-    lines.append("✔ Se quiser estabilidade: priorize o CONSERVADOR com maior min_acertos.")
-
-    out.write_text("\n".join(lines), encoding="utf-8")
-    print(f"✅ Relatório mastigado salvo: {out}")
+    Path(args.out).write_text("\n".join(out), encoding="utf-8")
+    print(f"OK: {args.out}")
 
 
 if __name__ == "__main__":
