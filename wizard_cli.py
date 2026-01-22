@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple, Set, Dict
+from typing import List, Tuple, Set, Dict
 
 import numpy as np
 import pandas as pd
@@ -21,13 +21,14 @@ from wizard_brain import (
 
 @dataclass
 class WizardConfig:
-    modo: str               # "agressivo" ou "conservador"
-    ultimos: int            # quantos concursos recentes comparar
-    jogos_finais: int       # quantos jogos o wizard deve entregar
-    max_seq_run: int = 4    # máx. de dezenas consecutivas
-    min_score: float = -1e18  # score mínimo para aceitar (deixe baixo, pq agora escolhe depois)
-    candidatos_amostragem: int = 80_000  # quantos candidatos pegar do arquivo (amostra aleatória)
-    seed: int = 42          # semente para reprodutibilidade
+    modo: str
+    ultimos: int
+    jogos_finais: int
+    max_seq_run: int = 4
+    min_score: float = -1e18
+    candidatos_amostragem: int = 300_000  # AUMENTADO (antes 80k)
+    seed: int = 42
+    preset: str = "auto"  # auto | solo | cobertura
 
 
 # =========================================
@@ -51,7 +52,7 @@ def carregar_base(base_path: Path) -> pd.DataFrame:
 def pegar_ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
     if "Concurso" in df.columns:
         df = df.sort_values("Concurso")
-    return df.tail(n).reset_index(drop=True)
+    return df.tail(int(n)).reset_index(drop=True)
 
 
 def respeita_sequencia_maxima(dezenas: List[int], max_seq_run: int) -> bool:
@@ -77,14 +78,13 @@ def _parse_linha_jogo(jogo_str: str) -> List[int] | None:
         return None
     if len(dezenas) != 15:
         return None
-    # valida range
     if any(d < 1 or d > 25 for d in dezenas):
         return None
     return sorted(dezenas)
 
 
 # =========================================
-#   AMOSTRAGEM SEM VÍCIO DE ORDEM (RESERVOIR)
+#   AMOSTRAGEM (RESERVOIR SAMPLING)
 # =========================================
 
 def amostrar_candidatos(
@@ -94,10 +94,6 @@ def amostrar_candidatos(
     k: int,
     seed: int,
 ) -> List[Tuple[int, ...]]:
-    """
-    Lê o arquivo grande e pega uma amostra aleatória de k jogos válidos,
-    sem viés da ordem do arquivo (reservoir sampling).
-    """
     rng = np.random.default_rng(seed)
 
     if not comb_path.exists():
@@ -112,22 +108,18 @@ def amostrar_candidatos(
     n_validos = 0
     for chunk in reader:
         for _, row in chunk.iterrows():
-            jogo_str = str(row.iloc[0])
-            dezenas = _parse_linha_jogo(jogo_str)
+            dezenas = _parse_linha_jogo(str(row.iloc[0]))
             if dezenas is None:
                 continue
 
             jogo_tupla = tuple(dezenas)
 
-            # 1) não repetir exatamente jogos recentes
             if jogo_tupla in ultimos_tuplas:
                 continue
 
-            # 2) checar sequência máxima
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) evita duplicado na própria amostra
             if jogo_tupla in vistos:
                 continue
 
@@ -139,7 +131,6 @@ def amostrar_candidatos(
             else:
                 j = int(rng.integers(0, n_validos))
                 if j < k:
-                    # substitui item aleatório do reservoir
                     antigo = amostra[j]
                     vistos.discard(antigo)
                     amostra[j] = jogo_tupla
@@ -149,7 +140,7 @@ def amostrar_candidatos(
 
 
 # =========================================
-#   ESCOLHA FINAL (GREEDY) USANDO SCORE INTELIGENTE
+#   ESCOLHA FINAL (GREEDY)
 # =========================================
 
 def escolher_jogos(
@@ -161,28 +152,19 @@ def escolher_jogos(
     frias: Set[int],
     modelo_cluster,
 ) -> List[Tuple[int, ...]]:
-    """
-    1) Pega uma amostra aleatória grande de candidatos
-    2) Seleciona os 'jogos_finais' via greedy, recalculando score com:
-       - diversidade (anti-clone)
-       - cobertura do conjunto
-       - separação agressivo x conservador (no wizard_brain)
-    """
-
     modo = config.modo
     finais = config.jogos_finais
 
     print(f"🔍 Lendo combinações de: {comb_path}")
     print(f"Modo: {modo} | Jogos finais desejados: {finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
+    print(f"Preset: {config.preset}")
 
-    # Set com tuplas dos últimos concursos (evitar repetição exata)
     ultimos_tuplas: Set[Tuple[int, ...]] = set()
     for _, linha in ultimos_df.iterrows():
         dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
         ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
 
-    # 1) Amostra aleatória (tira viés de ordem do arquivo)
     candidatos = amostrar_candidatos(
         comb_path=comb_path,
         ultimos_tuplas=ultimos_tuplas,
@@ -195,11 +177,8 @@ def escolher_jogos(
         print("⚠️ Nenhum candidato válido encontrado na amostragem.")
         return []
 
-    # 2) Greedy: seleciona os melhores recalculando score com escolhidos/cobertura
     escolhidos: List[Tuple[int, ...]] = []
     cobertura_contagem: Dict[int, int] = {d: 0 for d in range(1, 26)}
-
-    # Para acelerar: converte lista mutável local
     candidatos_restantes = candidatos.copy()
 
     for _ in range(finais):
@@ -217,7 +196,7 @@ def escolher_jogos(
                 frias=frias,
                 freq=freq,
                 modelo_cluster=modelo_cluster,
-                config=config,
+                config=config,            # <-- leva preset junto
                 escolhidos=escolhidos,
             )
 
@@ -228,7 +207,6 @@ def escolher_jogos(
         if melhor is None:
             break
 
-        # aplica min_score se você quiser “travar”
         if melhor_score < config.min_score:
             break
 
@@ -236,14 +214,13 @@ def escolher_jogos(
         for d in melhor:
             cobertura_contagem[int(d)] += 1
 
-        # remove o escolhido do pool
         candidatos_restantes = [c for c in candidatos_restantes if c != melhor]
 
     return escolhidos
 
 
 # =========================================
-#   IMPRESSÃO / RESUMO FINAL
+#   IMPRESSÃO
 # =========================================
 
 def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
@@ -261,42 +238,23 @@ def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
 
 
 # =========================================
-#   FUNÇÃO PRINCIPAL (CLI)
+#   MAIN
 # =========================================
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Wizard Lotofácil - gera jogos filtrando combinações."
     )
+    parser.add_argument("--modo", choices=["agressivo", "conservador"], default="conservador")
+    parser.add_argument("--ultimos", type=int, default=300)
+    parser.add_argument("--finais", type=int, default=5)
+    parser.add_argument("--candidatos", type=int, default=300_000)  # default aumentado
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
-        "--modo",
-        choices=["agressivo", "conservador"],
-        default="conservador",
-        help="Modo de jogo (default: conservador)",
-    )
-    parser.add_argument(
-        "--ultimos",
-        type=int,
-        default=300,
-        help="Quantidade de concursos recentes para comparação (default: 300)",
-    )
-    parser.add_argument(
-        "--finais",
-        type=int,
-        default=5,
-        help="Quantidade de jogos finais desejados (default: 5)",
-    )
-    parser.add_argument(
-        "--candidatos",
-        type=int,
-        default=80_000,
-        help="Tamanho da amostra aleatória de candidatos (default: 80000)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Seed da amostragem (default: 42)",
+        "--preset",
+        choices=["auto", "solo", "cobertura"],
+        default="auto",
+        help="auto: finais<=1 usa SOLO, senão COBERTURA; solo/cobertura força preset",
     )
 
     args = parser.parse_args()
@@ -309,9 +267,10 @@ def main() -> None:
         ultimos=args.ultimos,
         jogos_finais=args.finais,
         max_seq_run=4,
-        min_score=-1e18,  # deixe baixo, pq agora escolhe melhor no final
+        min_score=-1e18,
         candidatos_amostragem=args.candidatos,
         seed=args.seed,
+        preset=args.preset,
     )
 
     print("==============================================")
@@ -322,6 +281,7 @@ def main() -> None:
     print(f"Últimos: {config.ultimos} concursos")
     print(f"Jogos finais desejados: {config.jogos_finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
+    print(f"Preset: {config.preset}")
     print("==============================================\n")
 
     base_df = carregar_base(base_path)
