@@ -19,6 +19,10 @@ on:
         description: "Amostragem de candidatos (quanto maior, mais lento, mas tende a melhorar)"
         required: false
         default: "300000"
+      preset:
+        description: "Preset de diversidade: auto (recomendado), solo (1 jogo), cobertura (2+ jogos)"
+        required: false
+        default: "auto"
 
 permissions:
   contents: write
@@ -56,15 +60,19 @@ jobs:
           echo "Timestamp usado: $TS"
           echo "Data usada: $DATA"
 
-      - name: Definir inputs (ultimos/finais/candidatos)
+      - name: Definir inputs (ultimos/finais/candidatos/preset)
         run: |
           ULTIMOS="${{ github.event.inputs.ultimos || '300' }}"
           FINAIS="${{ github.event.inputs.finais || '5' }}"
           CANDIDATOS="${{ github.event.inputs.candidatos || '300000' }}"
+          PRESET="${{ github.event.inputs.preset || 'auto' }}"
+
           echo "ULTIMOS=$ULTIMOS" >> $GITHUB_ENV
           echo "FINAIS=$FINAIS" >> $GITHUB_ENV
           echo "CANDIDATOS=$CANDIDATOS" >> $GITHUB_ENV
-          echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS | CANDIDATOS=$CANDIDATOS"
+          echo "PRESET=$PRESET" >> $GITHUB_ENV
+
+          echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS | CANDIDATOS=$CANDIDATOS | PRESET=$PRESET"
 
       # 0) Atualiza base / insumos
       - name: Atualizar base da Caixa (últimos 1000)
@@ -80,11 +88,16 @@ jobs:
       - name: Gerar combinações inteligentes
         run: python scripts/gerar_combinacoes.py
 
-      # 1) GERAR JOGOS (TXT) — com amostragem maior
+      # 1) GERAR JOGOS (TXT)
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
         run: |
           echo "Modo agressivo..."
-          python wizard_cli.py --modo agressivo --ultimos "$ULTIMOS" --finais "$FINAIS" --candidatos "$CANDIDATOS" \
+          python wizard_cli.py \
+            --modo agressivo \
+            --ultimos "$ULTIMOS" \
+            --finais "$FINAIS" \
+            --candidatos "$CANDIDATOS" \
+            --preset "$PRESET" \
             | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
 
       - name: Criar atalho fixo - AGRESSIVO
@@ -96,7 +109,12 @@ jobs:
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
         run: |
           echo "Modo conservador..."
-          python wizard_cli.py --modo conservador --ultimos "$ULTIMOS" --finais "$FINAIS" --candidatos "$CANDIDATOS" \
+          python wizard_cli.py \
+            --modo conservador \
+            --ultimos "$ULTIMOS" \
+            --finais "$FINAIS" \
+            --candidatos "$CANDIDATOS" \
+            --preset "$PRESET" \
             | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
 
       - name: Criar atalho fixo - CONSERVADOR
@@ -116,7 +134,7 @@ jobs:
           grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_conservador.txt" >/dev/null \
             || (echo "Nao achei 15 dezenas no txt conservador" && head -n 120 "outputs/jogos_conservador.txt" && exit 1)
 
-      # 2) BACKTEST — agora ordena por score_alvo
+      # 2) BACKTEST
       - name: Backtest - AGRESSIVO (CSV + TXT)
         run: |
           python scripts/backtest.py \
@@ -161,7 +179,7 @@ jobs:
             --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
             --data "${{ steps.ts.outputs.DATA }}"
 
-      # 5) RELATORIO COMPLETO (com recomendação 1 ou 2 jogos por ALVO)
+      # 5) RELATORIO COMPLETO
       - name: Gerar relatorio completo (TXT)
         run: |
           python scripts/gerar_relatorio_completo.py \
@@ -182,5 +200,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f outputs base/base_limpa.xlsx base/base_dados_atualizada.xlsx || true
-          git commit -m "Atualizacao diaria Wizard Lotofacil (alvo 14/15 + amostragem maior)" || echo "Nada para commitar"
+          git commit -m "Atualizacao diaria Wizard Lotofacil (alvo 14/15 + amostragem maior + preset)" || echo "Nada para commitar"
           git push
