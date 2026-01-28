@@ -1,10 +1,6 @@
 name: Wizard Lotofacil Diário
 
 on:
-  schedule:
-    # 18:00 em Brasília (UTC-3) => 21:00 UTC (seg a sex)
-    - cron: "0 21 * * 1-5"
-
   workflow_dispatch:
     inputs:
       ultimos:
@@ -23,6 +19,9 @@ on:
         description: "Preset de diversidade: auto (recomendado), solo (1 jogo), cobertura (2+ jogos)"
         required: false
         default: "auto"
+
+  schedule:
+    - cron: "0 21 * * 1-5"
 
 permissions:
   contents: write
