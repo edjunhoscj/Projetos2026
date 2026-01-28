@@ -123,16 +123,51 @@ jobs:
           cp "$ULTIMO" outputs/jogos_conservador.txt
           echo "Atalho conservador -> $ULTIMO"
 
-      - name: Validar TXT de jogos (garante 15 dezenas)
+      - name: Validar TXT de jogos (robusto: 15 dezenas 1..25 sem repetição)
         run: |
-          set -e
-          test -s "outputs/jogos_agressivo.txt"
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_agressivo.txt" >/dev/null \
-            || (echo "Nao achei 15 dezenas no txt agressivo" && head -n 120 "outputs/jogos_agressivo.txt" && exit 1)
+          python - <<'PY'
+          import re
+          from pathlib import Path
 
-          test -s "outputs/jogos_conservador.txt"
-          grep -E "([0-9]{1,2}[[:space:]]+){14}[0-9]{1,2}" "outputs/jogos_conservador.txt" >/dev/null \
-            || (echo "Nao achei 15 dezenas no txt conservador" && head -n 120 "outputs/jogos_conservador.txt" && exit 1)
+          def extrair_jogos(path: Path):
+              txt = path.read_text(encoding="utf-8", errors="ignore")
+              jogos = []
+              for line in txt.splitlines():
+                  # captura números 1..25 (com ou sem zero à esquerda)
+                  nums = [int(x) for x in re.findall(r"\b\d{1,2}\b", line)]
+                  # tenta pegar as últimas 15 dezenas da linha (ignora "Jogo 01")
+                  if len(nums) >= 15:
+                      dezenas = nums[-15:]
+                      if all(1 <= d <= 25 for d in dezenas) and len(set(dezenas)) == 15:
+                          jogos.append(tuple(sorted(dezenas)))
+              # remove duplicados
+              jogos_uniq = []
+              seen = set()
+              for j in jogos:
+                  if j not in seen:
+                      seen.add(j)
+                      jogos_uniq.append(j)
+              return jogos_uniq
+
+          def validar(path_str: str):
+              p = Path(path_str)
+              if not p.exists() or p.stat().st_size == 0:
+                  raise SystemExit(f"Arquivo ausente ou vazio: {p}")
+              jogos = extrair_jogos(p)
+              if not jogos:
+                  # debug amigável
+                  preview = p.read_text(encoding="utf-8", errors="ignore").splitlines()[:120]
+                  print("=== DEBUG: primeiras linhas do arquivo ===")
+                  print("\n".join(preview))
+                  raise SystemExit(f"Não encontrei nenhuma linha com 15 dezenas válidas em: {p}")
+              print(f"OK: {p} -> {len(jogos)} jogos válidos detectados.")
+              # mostra 1 exemplo
+              ex = " ".join(f"{d:02d}" for d in jogos[0])
+              print(f"Exemplo: {ex}")
+
+          validar("outputs/jogos_agressivo.txt")
+          validar("outputs/jogos_conservador.txt")
+          PY
 
       # 2) BACKTEST
       - name: Backtest - AGRESSIVO (CSV + TXT)
