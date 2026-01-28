@@ -1,4 +1,3 @@
-# wizard_brain.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,22 +13,30 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class Estatisticas:
-    freq: Dict[int, float]
-    quentes: Set[int]
-    frias: Set[int]
-    freq_media: float
+    freq: Dict[int, float]        # frequência (0..1) por dezena (1..25)
+    quentes: Set[int]             # top quentes
+    frias: Set[int]               # top frias
+    freq_media: float             # média global das frequências
 
 
 @dataclass(frozen=True)
 class DiversidadeConfig:
+    # Punições por repetição com jogos já escolhidos
     peso_overlap: float = 1.2
     peso_jaccard: float = 6.0
+
+    # Bônus por cobertura (novas dezenas no conjunto)
     peso_cobertura: float = 0.8
+
+    # Separação de modos
     peso_separacao_modo: float = 0.15
+
+    # Controle de limite
     overlap_alvo_max: int = 11
     reforco_overlap_extra: float = 1.8
 
 
+# Melhor para apostar 1 jogo (pune pouco a diversidade)
 PRESET_SOLO = DiversidadeConfig(
     peso_overlap=0.6,
     peso_jaccard=3.0,
@@ -39,6 +46,7 @@ PRESET_SOLO = DiversidadeConfig(
     reforco_overlap_extra=1.4,
 )
 
+# Melhor para apostar 2+ jogos (pune overlap e força cobertura)
 PRESET_COBERTURA = DiversidadeConfig(
     peso_overlap=1.3,
     peso_jaccard=7.0,
@@ -88,7 +96,7 @@ def _binvec_25(dezenas15: Sequence[int]) -> np.ndarray:
 
 
 # ============================================================
-#   QUENTES/FRIAS
+#   QUENTES/FRIAS (base)
 # ============================================================
 
 def detectar_quentes_frias(
@@ -124,7 +132,7 @@ def detectar_quentes_frias(
 
 
 # ============================================================
-#   CLUSTER (opcional)
+#   CLUSTERIZAÇÃO (opcional) — modelo leve
 # ============================================================
 
 @dataclass
@@ -152,7 +160,6 @@ def clusterizar_concursos(
     X = np.stack([_binvec_25(row) for row in arr], axis=0)
 
     n_clusters = int(max(2, min(n_clusters, len(df) // 10 if len(df) >= 20 else 2)))
-
     km = KMeans(n_clusters=n_clusters, random_state=random_state, n_init="auto")
     km.fit(X)
 
@@ -160,8 +167,24 @@ def clusterizar_concursos(
 
 
 # ============================================================
-#   SCORE INTELIGENTE (compatível com seu CLI)
+#   SCORE INTELIGENTE (COM PRESET POR "APOSTAS")
 # ============================================================
+
+def _preset_config(config) -> DiversidadeConfig:
+    """
+    Decide preset efetivo:
+      - se config.preset for "solo"/"cobertura", respeita
+      - se "auto", escolhe por config.apostas (1 => solo, 2 => cobertura)
+    """
+    preset = str(getattr(config, "preset", "auto") or "auto").lower().strip()
+    if preset == "solo":
+        return PRESET_SOLO
+    if preset == "cobertura":
+        return PRESET_COBERTURA
+
+    apostas = int(getattr(config, "apostas", 1) or 1)
+    return PRESET_SOLO if apostas <= 1 else PRESET_COBERTURA
+
 
 def calcular_score_inteligente(
     dezenas: Sequence[int],
@@ -174,60 +197,63 @@ def calcular_score_inteligente(
     config,
     escolhidos: List[Tuple[int, ...]],
 ) -> float:
+    """
+    Score final = score_base + patch diversidade/cobertura/separação modo
+    Preset controlado por config.apostas / config.preset (auto/solo/cobertura).
+    """
     jogo = sorted(int(x) for x in dezenas)
     jogo_set = set(jogo)
     modo = str(getattr(config, "modo", "conservador")).lower()
 
     # -------------------------
-    # SCORE BASE
+    # (A) SCORE BASE (motor leve)
     # -------------------------
+
+    # A1) Cobertura local (prefere dezenas menos usadas nos escolhidos)
     cobertura_score = 0.0
     for d in jogo:
         freq_local = float(cobertura_contagem.get(d, 0))
         cobertura_score += 1.0 / (1.0 + freq_local)
 
-    max_overlap = 0
+    # A2) Penalidade por "colar" demais nos últimos concursos
+    max_overlap_recent = 0
     for ult in ultimos_tuplas:
         inter = len(jogo_set.intersection(ult))
-        if inter > max_overlap:
-            max_overlap = inter
+        if inter > max_overlap_recent:
+            max_overlap_recent = inter
 
     if modo.startswith("agre"):
-        penal_recent = max(0, max_overlap - 11) * 1.0
+        penal_recent = max(0, max_overlap_recent - 11) * 1.0
     else:
-        penal_recent = max(0, max_overlap - 9) * 1.4
+        penal_recent = max(0, max_overlap_recent - 9) * 1.4
 
+    # A3) Quentes/Frias (leve)
     qtd_quentes = len(jogo_set & quentes)
     qtd_frias = len(jogo_set & frias)
 
     bonus_quentes = 0.35 * _normalizar_0_1(qtd_quentes, 2, 7)
     penal_frias = 0.20 * _normalizar_0_1(qtd_frias, 4, 8)
 
+    # A4) Balanceamento por faixa (1–9 / 10–18 / 19–25)
     f1 = sum(1 for d in jogo if 1 <= d <= 9)
     f2 = sum(1 for d in jogo if 10 <= d <= 18)
     f3 = sum(1 for d in jogo if 19 <= d <= 25)
-
     bal = (abs(f1 - 5) + abs(f2 - 5) + abs(f3 - 5))
     penal_balance = 0.18 * bal
 
-    score_base = (cobertura_score + bonus_quentes - penal_frias) - (penal_recent + penal_balance)
+    # A5) Cluster tie-break (neutro aqui)
+    cluster_bonus = 0.0
+
+    score_base = (cobertura_score + bonus_quentes - penal_frias) - (penal_recent + penal_balance) + cluster_bonus
 
     # -------------------------
-    # PATCH: diversidade/cobertura/separação
+    # (B) PATCH: diversidade + cobertura conjunto + separação de modos
     # -------------------------
-    finais = int(getattr(config, "jogos_finais", 2) or 2)
-    preset_req = str(getattr(config, "preset", "auto")).lower()
 
-    if preset_req == "solo":
-        cfg = PRESET_SOLO
-    elif preset_req == "cobertura":
-        cfg = PRESET_COBERTURA
-    else:
-        cfg = PRESET_SOLO if finais <= 1 else PRESET_COBERTURA
-
+    cfg = _preset_config(config)
     score = float(score_base)
 
-    # união dos escolhidos
+    # B1) Cobertura do CONJUNTO (união dos escolhidos)
     uniao = set()
     for g in escolhidos:
         uniao |= set(g)
@@ -235,6 +261,7 @@ def calcular_score_inteligente(
     novas = len(jogo_set - uniao)
     score += cfg.peso_cobertura * novas
 
+    # B2) Penaliza “clone” com os já escolhidos
     if escolhidos:
         overlaps = [len(jogo_set & set(g)) for g in escolhidos]
         max_ov = max(overlaps) if overlaps else 0
@@ -251,6 +278,7 @@ def calcular_score_inteligente(
 
         score -= (penalty_overlap + penalty_jacc)
 
+    # B3) Separação real de modo usando frequência recente
     freq_vals = [float(freq.get(int(d), 0.0)) for d in jogo]
     mean_freq_jogo = _mean(freq_vals)
     mean_freq_global = _mean(list(freq.values())) if freq else 0.0
