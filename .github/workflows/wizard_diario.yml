@@ -21,6 +21,7 @@ on:
         default: "auto"
 
   schedule:
+    # 18:00 em Brasília (UTC-3) => 21:00 UTC (seg a sex)
     - cron: "0 21 * * 1-5"
 
 permissions:
@@ -29,6 +30,7 @@ permissions:
 jobs:
   rodar-wizard:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,18 +41,21 @@ jobs:
           python-version: "3.12"
 
       - name: Instalar dependencias
+        shell: bash
         run: |
           python -V
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Preparar outputs
+        shell: bash
         run: |
           mkdir -p outputs
           touch outputs/.gitkeep
 
       - name: Definir timestamp (America/Sao_Paulo)
         id: ts
+        shell: bash
         run: |
           TS=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y_%Hh%Mmin')
           DATA=$(TZ="America/Sao_Paulo" date +'%d-%m-%Y')
@@ -59,7 +64,7 @@ jobs:
           echo "Timestamp usado: $TS"
           echo "Data usada: $DATA"
 
-            - name: Definir inputs (ultimos/finais/candidatos/preset)
+      - name: Definir inputs (ultimos/finais/candidatos/preset)
         shell: bash
         run: |
           # Em schedule, github.event.inputs vem vazio -> usamos defaults no bash
@@ -80,6 +85,24 @@ jobs:
 
           echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS | CANDIDATOS=$CANDIDATOS | PRESET=$PRESET"
 
+      # 0) Atualiza base / insumos (se você tiver esses scripts)
+      - name: Atualizar base da Caixa (últimos 1000)
+        shell: bash
+        run: python scripts/atualizar_base.py --ultimos 1000
+
+      - name: Gerar base limpa
+        shell: bash
+        run: python scripts/gerar_base_limpa.py
+
+      - name: Analisar base (padrões)
+        shell: bash
+        run: |
+          python scripts/analise_base.py --base base/base_limpa.xlsx --ultimos 200 > outputs/analise_base.txt
+
+      - name: Gerar combinações inteligentes
+        shell: bash
+        run: python scripts/gerar_combinacoes.py
+
       # 1) GERAR JOGOS (TXT)
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
         shell: bash
@@ -94,7 +117,6 @@ jobs:
             --preset "$PRESET" \
             | tee "$OUT"
 
-          # atalho fixo = SEM ls -t (sempre do run atual)
           cp "$OUT" outputs/jogos_agressivo.txt
           echo "Atalho agressivo -> $OUT"
           echo "Prévia agressivo:"
@@ -113,7 +135,6 @@ jobs:
             --preset "$PRESET" \
             | tee "$OUT"
 
-          # atalho fixo = SEM ls -t (sempre do run atual)
           cp "$OUT" outputs/jogos_conservador.txt
           echo "Atalho conservador -> $OUT"
           echo "Prévia conservador:"
@@ -132,6 +153,7 @@ jobs:
           def extrair_jogos(path: Path):
               txt = path.read_text(encoding="utf-8", errors="ignore")
               jogos = []
+
               for line in txt.splitlines():
                   line = line.strip()
                   if not line:
@@ -180,9 +202,9 @@ jobs:
           validar("outputs/jogos_conservador.txt")
           PY
 
-
       # 2) BACKTEST
       - name: Backtest - AGRESSIVO (CSV + TXT)
+        shell: bash
         run: |
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_agressivo.txt" \
@@ -196,6 +218,7 @@ jobs:
           cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt" || true
 
       - name: Backtest - CONSERVADOR (CSV + TXT)
+        shell: bash
         run: |
           python scripts/backtest.py \
             --jogos-file "outputs/jogos_conservador.txt" \
@@ -210,6 +233,7 @@ jobs:
 
       # 3) DASHBOARD
       - name: Gerar dashboard (CSV)
+        shell: bash
         run: |
           python scripts/dashboard.py \
             --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
@@ -219,6 +243,7 @@ jobs:
 
       # 4) RELATORIO MASTIGADO
       - name: Gerar relatorio mastigado (TXT)
+        shell: bash
         run: |
           python scripts/relatorio_mastigado.py \
             --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
@@ -228,6 +253,7 @@ jobs:
 
       # 5) RELATORIO COMPLETO
       - name: Gerar relatorio completo (TXT)
+        shell: bash
         run: |
           python scripts/gerar_relatorio_completo.py \
             --data "${{ steps.ts.outputs.DATA }}" \
@@ -243,6 +269,7 @@ jobs:
 
       # 6) COMMIT / PUSH
       - name: Commit e push dos resultados
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
