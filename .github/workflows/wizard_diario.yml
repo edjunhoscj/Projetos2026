@@ -60,12 +60,19 @@ jobs:
           echo "Timestamp usado: $TS"
           echo "Data usada: $DATA"
 
-      - name: Definir inputs (ultimos/finais/candidatos/preset)
+            - name: Definir inputs (ultimos/finais/candidatos/preset)
+        shell: bash
         run: |
-          ULTIMOS="${{ github.event.inputs.ultimos || '300' }}"
-          FINAIS="${{ github.event.inputs.finais || '5' }}"
-          CANDIDATOS="${{ github.event.inputs.candidatos || '300000' }}"
-          PRESET="${{ github.event.inputs.preset || 'auto' }}"
+          # Em schedule, github.event.inputs vem vazio -> usamos defaults no bash
+          ULTIMOS="${{ github.event.inputs.ultimos }}"
+          FINAIS="${{ github.event.inputs.finais }}"
+          CANDIDATOS="${{ github.event.inputs.candidatos }}"
+          PRESET="${{ github.event.inputs.preset }}"
+
+          ULTIMOS="${ULTIMOS:-300}"
+          FINAIS="${FINAIS:-5}"
+          CANDIDATOS="${CANDIDATOS:-300000}"
+          PRESET="${PRESET:-auto}"
 
           echo "ULTIMOS=$ULTIMOS" >> $GITHUB_ENV
           echo "FINAIS=$FINAIS" >> $GITHUB_ENV
@@ -74,56 +81,47 @@ jobs:
 
           echo "ULTIMOS=$ULTIMOS | FINAIS=$FINAIS | CANDIDATOS=$CANDIDATOS | PRESET=$PRESET"
 
-      # 0) Atualiza base / insumos
-      - name: Atualizar base da Caixa (últimos 1000)
-        run: python scripts/atualizar_base.py --ultimos 1000
-
-      - name: Gerar base limpa
-        run: python scripts/gerar_base_limpa.py
-
-      - name: Analisar base (padrões)
-        run: |
-          python scripts/analise_base.py --base base/base_limpa.xlsx --ultimos 200 > outputs/analise_base.txt
-
-      - name: Gerar combinações inteligentes
-        run: python scripts/gerar_combinacoes.py
-
       # 1) GERAR JOGOS (TXT)
       - name: Rodar Wizard - AGRESSIVO (gera TXT)
+        shell: bash
         run: |
           echo "Modo agressivo..."
+          OUT="outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
           python wizard_cli.py \
             --modo agressivo \
             --ultimos "$ULTIMOS" \
             --finais "$FINAIS" \
             --candidatos "$CANDIDATOS" \
             --preset "$PRESET" \
-            | tee "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt"
+            | tee "$OUT"
 
-      - name: Criar atalho fixo - AGRESSIVO
-        run: |
-          ULTIMO=$(ls -t outputs/jogos_agressivo_*.txt | head -n 1)
-          cp "$ULTIMO" outputs/jogos_agressivo.txt
-          echo "Atalho agressivo -> $ULTIMO"
+          # atalho fixo = SEM ls -t (sempre do run atual)
+          cp "$OUT" outputs/jogos_agressivo.txt
+          echo "Atalho agressivo -> $OUT"
+          echo "Prévia agressivo:"
+          head -n 60 outputs/jogos_agressivo.txt
 
       - name: Rodar Wizard - CONSERVADOR (gera TXT)
+        shell: bash
         run: |
           echo "Modo conservador..."
+          OUT="outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
           python wizard_cli.py \
             --modo conservador \
             --ultimos "$ULTIMOS" \
             --finais "$FINAIS" \
             --candidatos "$CANDIDATOS" \
             --preset "$PRESET" \
-            | tee "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt"
+            | tee "$OUT"
 
-      - name: Criar atalho fixo - CONSERVADOR
-        run: |
-          ULTIMO=$(ls -t outputs/jogos_conservador_*.txt | head -n 1)
-          cp "$ULTIMO" outputs/jogos_conservador.txt
-          echo "Atalho conservador -> $ULTIMO"
+          # atalho fixo = SEM ls -t (sempre do run atual)
+          cp "$OUT" outputs/jogos_conservador.txt
+          echo "Atalho conservador -> $OUT"
+          echo "Prévia conservador:"
+          head -n 60 outputs/jogos_conservador.txt
 
       - name: Validar TXT de jogos (robusto: 15 dezenas 1..25 sem repetição)
+        shell: bash
         run: |
           python - <<'PY'
           import re
@@ -133,18 +131,8 @@ jobs:
           RX_JOGO_PREFIX = re.compile(r"^\s*Jogo\s+\d{1,2}\s*:", re.IGNORECASE)
 
           def extrair_jogos(path: Path):
-              """
-              Extrai jogos do TXT:
-              - aceita linhas como "Jogo 01: 01 02 ... 25"
-              - aceita linhas que contenham 15 dezenas
-              Regras:
-              - dezenas 1..25
-              - sem repetição
-              - remove duplicados mantendo ordem
-              """
               txt = path.read_text(encoding="utf-8", errors="ignore")
               jogos = []
-
               for line in txt.splitlines():
                   line = line.strip()
                   if not line:
@@ -154,41 +142,33 @@ jobs:
                   if len(nums) < 15:
                       continue
 
-                  # Se a linha tem "Jogo XX:", removemos o XX do prefixo
-                  # Ex: "Jogo 01: 01 02 ...", nesse caso a regex pega [1, 1,2,3...]
+                  # "Jogo 01: 01 02 ..." => remove o "01" do prefixo
                   if RX_JOGO_PREFIX.match(line) and len(nums) >= 16:
-                      nums = nums[1:]  # remove o número do "Jogo 01"
+                      nums = nums[1:]
 
-                  # Estratégia:
-                  # - Se após remover prefixo temos EXATAMENTE 15, usa isso.
-                  # - Se tem mais, pega as últimas 15 (geralmente é onde ficam as dezenas do jogo).
                   dezenas = nums if len(nums) == 15 else nums[-15:]
 
                   if all(1 <= d <= 25 for d in dezenas) and len(set(dezenas)) == 15:
                       jogos.append(tuple(sorted(dezenas)))
 
-              # Remove duplicados mantendo ordem
               seen = set()
               uniq = []
               for j in jogos:
                   if j not in seen:
                       seen.add(j)
                       uniq.append(j)
-
               return uniq
 
           def validar(path_str: str):
               p = Path(path_str)
-
               if not p.exists():
                   raise SystemExit(f"Arquivo não existe: {p}")
               if p.stat().st_size == 0:
                   raise SystemExit(f"Arquivo vazio: {p}")
 
               jogos = extrair_jogos(p)
-
               if not jogos:
-                  preview = p.read_text(encoding="utf-8", errors="ignore").splitlines()[:120]
+                  preview = p.read_text(encoding="utf-8", errors="ignore").splitlines()[:160]
                   print("=== DEBUG: primeiras linhas do arquivo ===")
                   print("\n".join(preview))
                   raise SystemExit(f"Não encontrei nenhuma linha com 15 dezenas válidas em: {p}")
