@@ -164,6 +164,72 @@ jobs:
           validar("outputs/jogos_conservador.txt")
           PY
 
+      # 2) BACKTEST
+      - name: Backtest - CONSERVADOR (CSV + TXT)
+        shell: bash
+        run: |
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_conservador.txt" \
+            --base "base/base_limpa.xlsx" \
+            --ultimos "$ULTIMOS" \
+            --csv-out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --titulo "BACKTEST — MODO CONSERVADOR"
+
+          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_conservador.csv" || true
+          cp "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_conservador.txt" || true
+
+      - name: Backtest - AGRESSIVO (CSV + TXT)
+        shell: bash
+        run: |
+          python scripts/backtest.py \
+            --jogos-file "outputs/jogos_agressivo.txt" \
+            --base "base/base_limpa.xlsx" \
+            --ultimos "$ULTIMOS" \
+            --csv-out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --titulo "BACKTEST — MODO AGRESSIVO"
+
+          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" "outputs/backtest_agressivo.csv" || true
+          cp "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" "outputs/backtest_agressivo.txt" || true
+
+      # 3) DASHBOARD
+      - name: Gerar dashboard (CSV)
+        shell: bash
+        run: |
+          python scripts/dashboard.py \
+            --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out-resumo "outputs/dashboard_resumo_geral.csv" \
+            --out-dist "outputs/dashboard_distribuicao_acertos.csv"
+
+      # 4) RELATORIO MASTIGADO
+      - name: Gerar relatorio mastigado (TXT)
+        shell: bash
+        run: |
+          python scripts/relatorio_mastigado.py \
+            --agressivo "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --conservador "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --out "outputs/relatorio_mastigado_${{ steps.ts.outputs.TS }}.txt" \
+            --data "${{ steps.ts.outputs.DATA }}"
+
+      # 5) RELATORIO COMPLETO
+      - name: Gerar relatorio completo (TXT)
+        shell: bash
+        run: |
+          python scripts/gerar_relatorio_completo.py \
+            --data "${{ steps.ts.outputs.DATA }}" \
+            --jogos-ag "outputs/jogos_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --jogos-cons "outputs/jogos_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-ag-txt "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-cons-txt "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.txt" \
+            --bt-ag-csv "outputs/backtest_agressivo_${{ steps.ts.outputs.TS }}.csv" \
+            --bt-cons-csv "outputs/backtest_conservador_${{ steps.ts.outputs.TS }}.csv" \
+            --dash-resumo "outputs/dashboard_resumo_geral.csv" \
+            --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
+            --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
+
+
       - name: Commit e push dos resultados
         shell: bash
         run: |
