@@ -229,6 +229,12 @@ jobs:
             --dash-dist "outputs/dashboard_distribuicao_acertos.csv" \
             --out "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt"
 
+      - name: Mostrar relatório completo no log
+        shell: bash
+        run: |
+          echo "=========== RELATORIO COMPLETO ==========="
+          tail -n 400 "outputs/relatorio_completo_${{ steps.ts.outputs.TS }}.txt" || true
+
 
       - name: Commit e push dos resultados
         shell: bash
