@@ -1,0 +1,141 @@
+==============================================
+RELATÓRIO COMPLETO DO WIZARD
+DATA: 29-01-2026
+==============================================
+
+------------ BACKTEST — MODO AGRESSIVO ------------
+========================================================
+BACKTEST — MODO AGRESSIVO
+========================================================
+
+Recorte analisado: últimos 500 concursos
+
+Ranking PRINCIPAL (ALVO 14/15):
+Prioridade: (qtd_14plus) > score_alvo > 13+ > max > média
+score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)
+
+ jogo  qtd_14plus  prob_14plus  prob_15  score_alvo  score_alvo_por100  score_13plus  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    2           0          0.0      0.0          12                2.4             0          9.010           12            6    36     6     0     0     0
+    1           0          0.0      0.0           0                0.0             0          8.974           11            6    44     0     0     0     0
+
+Ranking SECUNDÁRIO (por média):
+
+ jogo  qtd_14plus  prob_14plus  prob_15  score_alvo  score_alvo_por100  score_13plus  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    2           0          0.0      0.0          12                2.4             0          9.010           12            6    36     6     0     0     0
+    1           0          0.0      0.0           0                0.0             0          8.974           11            6    44     0     0     0     0
+
+
+------------ BACKTEST — MODO CONSERVADOR ------------
+========================================================
+BACKTEST — MODO CONSERVADOR
+========================================================
+
+Recorte analisado: últimos 500 concursos
+
+Ranking PRINCIPAL (ALVO 14/15):
+Prioridade: (qtd_14plus) > score_alvo > 13+ > max > média
+score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)
+
+ jogo  qtd_14plus  prob_14plus  prob_15  score_alvo  score_alvo_por100  score_13plus  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    2           0          0.0      0.0          12                2.4             0          9.010           12            6    36     6     0     0     0
+    1           0          0.0      0.0           0                0.0             0          8.974           11            6    44     0     0     0     0
+
+Ranking SECUNDÁRIO (por média):
+
+ jogo  qtd_14plus  prob_14plus  prob_15  score_alvo  score_alvo_por100  score_13plus  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0
+    2           0          0.0      0.0          12                2.4             0          9.010           12            6    36     6     0     0     0
+    1           0          0.0      0.0           0                0.0             0          8.974           11            6    44     0     0     0     0
+
+
+------------ DASHBOARD — RESUMO GERAL (CSV) ------------
+       modo  jogos_avaliados  media_acertos  mediana_acertos  max_acertos  min_acertos  score_alvo_total  score_alvo_melhor  score_13plus_total
+  agressivo                2          8.992            8.992         12.0          6.0              12.0               12.0                 0.0
+conservador                2          8.992            8.992         12.0          6.0              12.0               12.0                 0.0
+
+------------ DISTRIBUIÇÃO DE ACERTOS (CSV) ------------
+       modo  max_acertos  qtd
+  agressivo         11.0    1
+  agressivo         12.0    1
+conservador         11.0    1
+conservador         12.0    1
+
+------------ JOGOS GERADOS — AGRESSIVO ------------
+==============================================
+WIZARD LOTOFÁCIL - CLI
+==============================================
+Base histórica: base/base_limpa.xlsx
+Modo: agressivo
+Últimos: 500 concursos
+Jogos finais desejados: 2
+Candidatos (amostragem): 300000
+Apostas (preset): 1
+Preset: solo (param: auto)
+==============================================
+
+🔍 Lendo combinações de: combinacoes/combinacoes_inteligentes.csv
+Modo: agressivo | Jogos finais desejados: 2
+Candidatos (amostragem): 300000
+Apostas (preset): 1 | Preset: solo
+
+========================================
+        JOGOS GERADOS PELO WIZARD       
+========================================
+Modo: agressivo
+Jogos finais: 2
+Apostas (preset): 1 | Preset: solo
+
+Jogo 01: 03 04 07 08 09 10 13 14 16 17 20 22 23 24 25
+Jogo 02: 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+
+Boa sorte! 🍀
+
+
+------------ JOGOS GERADOS — CONSERVADOR ------------
+==============================================
+WIZARD LOTOFÁCIL - CLI
+==============================================
+Base histórica: base/base_limpa.xlsx
+Modo: conservador
+Últimos: 500 concursos
+Jogos finais desejados: 2
+Candidatos (amostragem): 300000
+Apostas (preset): 1
+Preset: solo (param: auto)
+==============================================
+
+🔍 Lendo combinações de: combinacoes/combinacoes_inteligentes.csv
+Modo: conservador | Jogos finais desejados: 2
+Candidatos (amostragem): 300000
+Apostas (preset): 1 | Preset: solo
+
+========================================
+        JOGOS GERADOS PELO WIZARD       
+========================================
+Modo: conservador
+Jogos finais: 2
+Apostas (preset): 1 | Preset: solo
+
+Jogo 01: 03 04 07 08 09 10 13 14 16 17 20 22 23 24 25
+Jogo 02: 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+
+Boa sorte! 🍀
+
+
+============ RECOMENDAÇÃO FINAL — FOCO 14/15 ============
+Ranking principal:
+score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)
+Desempate: 13+ > max > média
+
+Se você for apostar SÓ 1 jogo (recomendado):
+➡️  AGRESSIVO (Jogo 02): 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+
+Se você for apostar 2 jogos (duas opções):
+✅ Opção A — 2 do AGRESSIVO (maior cobertura):
+   - AG 02: 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+   - AG 01: 03 04 07 08 09 10 13 14 16 17 20 22 23 24 25
+   (overlap: 5 dezenas repetidas)
+
+✅ Opção B — 1 AGRESSIVO + 1 CONSERVADOR:
+   - AG 02: 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+   - CO 02: 01 02 05 06 09 11 12 14 15 18 19 21 22 23 24
+   (overlap: 15 dezenas repetidas)
