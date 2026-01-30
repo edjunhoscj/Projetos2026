@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
-from wizard_brain import construir_bandas
+
+# ✅ garante que o Python enxergue o diretório raiz do repo
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from wizard_brain import construir_bandas  # noqa: E402
 
 
 def main() -> None:
@@ -50,9 +57,11 @@ def main() -> None:
     out.append(f"  banda (k={bandas.cfg.k_std}) = [{bandas.run_lo:.2f}, {bandas.run_hi:.2f}]")
     out.append("")
 
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text("\n".join(out), encoding="utf-8")
-    print(f"OK: {args.out}")
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(out), encoding="utf-8")
+
+    print(f"OK: {out_path}")
 
 
 if __name__ == "__main__":
