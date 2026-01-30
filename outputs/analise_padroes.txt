@@ -1,0 +1,23 @@
+==============================================
+ANÁLISE DE PADRÕES — BANDAS (ÚLTIMOS N)
+==============================================
+N = 300
+
+SOMA das dezenas:
+  média = 194.73 | sd = 18.03
+  banda (k=1.0) = [176.70, 212.76]
+
+PARES (qtd):
+  média = 7.10 | sd = 1.23
+  banda (k=1.0) = [5.88, 8.33]
+
+FAIXAS (qtd por bloco):
+  f1_5: média=3.03 sd=1.02 banda=[2.01, 4.06]
+  f6_10: média=2.92 sd=0.95 banda=[1.98, 3.87]
+  f11_15: média=3.10 sd=1.00 banda=[2.10, 4.10]
+  f16_20: média=2.91 sd=1.01 banda=[1.90, 3.92]
+  f21_25: média=3.03 sd=1.00 banda=[2.04, 4.03]
+
+MAX RUN (maior sequência consecutiva):
+  média = 4.94 | sd = 1.51
+  banda (k=1.0) = [3.44, 6.45]
