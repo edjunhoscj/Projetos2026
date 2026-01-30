@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple, Set, Dict
+from typing import List, Sequence, Tuple, Set, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -11,39 +11,35 @@ import pandas as pd
 from wizard_brain import (
     detectar_quentes_frias,
     clusterizar_concursos,
+    construir_bandas,
     calcular_score_inteligente,
-    PRESET_SOLO,
-    PRESET_COBERTURA,
 )
 
 
-# =========================================
-#   CONFIGURAÇÃO DO WIZARD
-# =========================================
-
 @dataclass
 class WizardConfig:
-    modo: str               # "agressivo" ou "conservador"
-    ultimos: int            # quantos concursos recentes comparar
-    jogos_finais: int       # quantos jogos o wizard deve entregar
-    apostas: int = 1        # quantos jogos você realmente aposta (1 ou 2) -> controla preset
-    preset: str = "auto"    # "auto", "solo", "cobertura" (auto escolhe pelo campo apostas)
-    max_seq_run: int = 4    # máx. de dezenas consecutivas
-    min_score: float = -1e18  # score mínimo para aceitar (deixe baixo, pq agora escolhe depois)
-    candidatos_amostragem: int = 80_000  # quantos candidatos pegar do arquivo (amostra aleatória)
-    seed: int = 42          # semente para reprodutibilidade
+    modo: str
+    ultimos: int
+    jogos_finais: int
 
+    # filtros / score
+    max_seq_run: int = 4
+    min_score: float = -1e18
 
-# =========================================
-#   FUNÇÕES AUXILIARES
-# =========================================
+    # amostragem
+    candidatos_amostragem: int = 80_000
+    seed: int = 42
+
+    # presets
+    preset: str = "auto"     # auto|solo|cobertura
+    bandas: str = "soft"     # off|soft|hard
+
 
 def carregar_base(base_path: Path) -> pd.DataFrame:
     if not base_path.exists():
         raise FileNotFoundError(f"Base histórica não encontrada em: {base_path}")
 
     df = pd.read_excel(base_path)
-
     esperadas = ["Concurso"] + [f"D{i}" for i in range(1, 16)]
     faltando = [c for c in esperadas if c not in df.columns]
     if faltando:
@@ -55,7 +51,7 @@ def carregar_base(base_path: Path) -> pd.DataFrame:
 def pegar_ultimos_concursos(df: pd.DataFrame, n: int) -> pd.DataFrame:
     if "Concurso" in df.columns:
         df = df.sort_values("Concurso")
-    return df.tail(n).reset_index(drop=True)
+    return df.tail(int(n)).reset_index(drop=True)
 
 
 def respeita_sequencia_maxima(dezenas: List[int], max_seq_run: int) -> bool:
@@ -83,24 +79,10 @@ def _parse_linha_jogo(jogo_str: str) -> List[int] | None:
         return None
     if any(d < 1 or d > 25 for d in dezenas):
         return None
+    if len(set(dezenas)) != 15:
+        return None
     return sorted(dezenas)
 
-
-def _preset_nome(config: WizardConfig) -> str:
-    """
-    Retorna nome do preset efetivo:
-      - se config.preset for "solo"/"cobertura", respeita
-      - se "auto", escolhe pelo config.apostas (1 => solo, 2 => cobertura)
-    """
-    p = (config.preset or "auto").lower().strip()
-    if p in ("solo", "cobertura"):
-        return p
-    return "solo" if int(config.apostas) <= 1 else "cobertura"
-
-
-# =========================================
-#   AMOSTRAGEM SEM VÍCIO DE ORDEM (RESERVOIR)
-# =========================================
 
 def amostrar_candidatos(
     comb_path: Path,
@@ -110,8 +92,7 @@ def amostrar_candidatos(
     seed: int,
 ) -> List[Tuple[int, ...]]:
     """
-    Lê o arquivo grande e pega uma amostra aleatória de k jogos válidos,
-    sem viés da ordem do arquivo (reservoir sampling).
+    Reservoir sampling: amostra k candidatos sem viés de ordem.
     """
     rng = np.random.default_rng(seed)
 
@@ -134,15 +115,12 @@ def amostrar_candidatos(
 
             jogo_tupla = tuple(dezenas)
 
-            # 1) não repetir exatamente jogos recentes
             if jogo_tupla in ultimos_tuplas:
                 continue
 
-            # 2) checar sequência máxima
             if not respeita_sequencia_maxima(dezenas, max_seq_run):
                 continue
 
-            # 3) evita duplicado na própria amostra
             if jogo_tupla in vistos:
                 continue
 
@@ -162,43 +140,36 @@ def amostrar_candidatos(
     return amostra
 
 
-# =========================================
-#   ESCOLHA FINAL (GREEDY) USANDO SCORE INTELIGENTE
-# =========================================
-
 def escolher_jogos(
     comb_path: Path,
     ultimos_df: pd.DataFrame,
+    base_df: pd.DataFrame,
     config: WizardConfig,
     freq: Dict[int, float],
     quentes: Set[int],
     frias: Set[int],
     modelo_cluster,
 ) -> List[Tuple[int, ...]]:
-    """
-    1) Pega uma amostra aleatória grande de candidatos
-    2) Seleciona os 'jogos_finais' via greedy, recalculando score com:
-       - diversidade (anti-clone)
-       - cobertura do conjunto
-       - separação agressivo x conservador (no wizard_brain)
-       - preset controlado por config.apostas / config.preset
-    """
     modo = config.modo
     finais = config.jogos_finais
-    preset_efetivo = _preset_nome(config)
 
     print(f"🔍 Lendo combinações de: {comb_path}")
     print(f"Modo: {modo} | Jogos finais desejados: {finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
-    print(f"Apostas (preset): {config.apostas} | Preset: {preset_efetivo}")
+    print(f"Preset: {config.preset}")
+    print(f"Bandas: {config.bandas}")
 
-    # Set com tuplas dos últimos concursos (evitar repetição exata)
+    # tuplas dos últimos concursos (evitar repetição exata)
     ultimos_tuplas: Set[Tuple[int, ...]] = set()
     for _, linha in ultimos_df.iterrows():
         dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
         ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
 
-    # 1) Amostra aleatória (tira viés de ordem do arquivo)
+    # Bandas (model) baseado na base, recortado nos últimos N do wizard
+    bandas_model = None
+    if str(config.bandas).lower() in ("soft", "hard"):
+        bandas_model = construir_bandas(base_df, ultimos=int(config.ultimos))
+
     candidatos = amostrar_candidatos(
         comb_path=comb_path,
         ultimos_tuplas=ultimos_tuplas,
@@ -211,12 +182,11 @@ def escolher_jogos(
         print("⚠️ Nenhum candidato válido encontrado na amostragem.")
         return []
 
-    # 2) Greedy: seleciona os melhores recalculando score com escolhidos/cobertura
     escolhidos: List[Tuple[int, ...]] = []
     cobertura_contagem: Dict[int, int] = {d: 0 for d in range(1, 26)}
     candidatos_restantes = candidatos.copy()
 
-    for _ in range(int(finais)):
+    for _ in range(finais):
         melhor = None
         melhor_score = -1e18
 
@@ -233,6 +203,7 @@ def escolher_jogos(
                 modelo_cluster=modelo_cluster,
                 config=config,
                 escolhidos=escolhidos,
+                bandas_model=bandas_model,
             )
 
             if score > melhor_score:
@@ -254,19 +225,14 @@ def escolher_jogos(
     return escolhidos
 
 
-# =========================================
-#   IMPRESSÃO / RESUMO FINAL
-# =========================================
-
 def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
-    preset_efetivo = _preset_nome(config)
-
     print("\n========================================")
     print("        JOGOS GERADOS PELO WIZARD       ")
     print("========================================")
     print(f"Modo: {config.modo}")
     print(f"Jogos finais: {len(jogos)}")
-    print(f"Apostas (preset): {config.apostas} | Preset: {preset_efetivo}\n")
+    print(f"Preset: {config.preset}")
+    print(f"Bandas: {config.bandas}\n")
 
     for idx, jogo in enumerate(jogos, start=1):
         seq = " ".join(f"{d:02d}" for d in jogo)
@@ -275,56 +241,26 @@ def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
     print("\nBoa sorte! 🍀")
 
 
-# =========================================
-#   FUNÇÃO PRINCIPAL (CLI)
-# =========================================
-
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Wizard Lotofácil - gera jogos filtrando combinações."
-    )
-    parser.add_argument(
-        "--modo",
-        choices=["agressivo", "conservador"],
-        default="conservador",
-        help="Modo de jogo (default: conservador)",
-    )
-    parser.add_argument(
-        "--ultimos",
-        type=int,
-        default=300,
-        help="Quantidade de concursos recentes para comparação (default: 300)",
-    )
-    parser.add_argument(
-        "--finais",
-        type=int,
-        default=5,
-        help="Quantidade de jogos finais desejados (default: 5)",
-    )
-    parser.add_argument(
-        "--candidatos",
-        type=int,
-        default=80_000,
-        help="Tamanho da amostra aleatória de candidatos (default: 80000)",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=42,
-        help="Seed da amostragem (default: 42)",
-    )
-    parser.add_argument(
-        "--apostas",
-        type=int,
-        default=1,
-        choices=[1, 2],
-        help="Quantos jogos você realmente aposta (1 ou 2). Controla o preset.",
-    )
+    parser = argparse.ArgumentParser(description="Wizard Lotofácil - gera jogos filtrando combinações.")
+    parser.add_argument("--modo", choices=["agressivo", "conservador"], default="conservador")
+    parser.add_argument("--ultimos", type=int, default=300)
+    parser.add_argument("--finais", type=int, default=5)
+    parser.add_argument("--candidatos", type=int, default=300_000)
+    parser.add_argument("--seed", type=int, default=42)
+
     parser.add_argument(
         "--preset",
         choices=["auto", "solo", "cobertura"],
         default="auto",
-        help="Força preset. auto usa --apostas (1=solo, 2=cobertura).",
+        help="Preset de diversidade: auto|solo|cobertura",
+    )
+
+    parser.add_argument(
+        "--bandas",
+        choices=["off", "soft", "hard"],
+        default="soft",
+        help="Bandas de padrões (off|soft|hard). soft = penaliza fora do típico",
     )
 
     args = parser.parse_args()
@@ -336,15 +272,13 @@ def main() -> None:
         modo=args.modo,
         ultimos=args.ultimos,
         jogos_finais=args.finais,
-        apostas=args.apostas,
-        preset=args.preset,
         max_seq_run=4,
         min_score=-1e18,
         candidatos_amostragem=args.candidatos,
         seed=args.seed,
+        preset=args.preset,
+        bandas=args.bandas,
     )
-
-    preset_efetivo = _preset_nome(config)
 
     print("==============================================")
     print("WIZARD LOTOFÁCIL - CLI")
@@ -354,8 +288,8 @@ def main() -> None:
     print(f"Últimos: {config.ultimos} concursos")
     print(f"Jogos finais desejados: {config.jogos_finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
-    print(f"Apostas (preset): {config.apostas}")
-    print(f"Preset: {preset_efetivo} (param: {config.preset})")
+    print(f"Preset: {config.preset}")
+    print(f"Bandas: {config.bandas}")
     print("==============================================\n")
 
     base_df = carregar_base(base_path)
@@ -371,6 +305,7 @@ def main() -> None:
     jogos = escolher_jogos(
         comb_path=comb_path,
         ultimos_df=ultimos_df,
+        base_df=base_df,
         config=config,
         freq=freq,
         quentes=quentes,
