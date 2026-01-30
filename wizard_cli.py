@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Sequence, Tuple, Set, Dict, Optional
+from typing import List, Tuple, Set, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -31,8 +31,23 @@ class WizardConfig:
     seed: int = 42
 
     # presets
-    preset: str = "auto"     # auto|solo|cobertura
-    bandas: str = "soft"     # off|soft|hard
+    preset_param: str = "auto"  # o que veio do CLI (auto|solo|cobertura)
+    preset: str = "auto"        # efetivo (solo|cobertura)
+    bandas: str = "soft"        # off|soft|hard
+
+
+def _resolver_preset(preset_param: str, jogos_finais: int) -> str:
+    """
+    Resolve o preset efetivo.
+    Regras:
+      - solo/cobertura: respeita o parâmetro
+      - auto: solo se jogos_finais <= 1, senão cobertura
+    """
+    p = str(preset_param or "auto").lower().strip()
+    if p in ("solo", "cobertura"):
+        return p
+    # auto
+    return "solo" if int(jogos_finais) <= 1 else "cobertura"
 
 
 def carregar_base(base_path: Path) -> pd.DataFrame:
@@ -156,7 +171,7 @@ def escolher_jogos(
     print(f"🔍 Lendo combinações de: {comb_path}")
     print(f"Modo: {modo} | Jogos finais desejados: {finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
-    print(f"Preset: {config.preset}")
+    print(f"Preset: {config.preset} (param: {config.preset_param})")
     print(f"Bandas: {config.bandas}")
 
     # tuplas dos últimos concursos (evitar repetição exata)
@@ -165,7 +180,7 @@ def escolher_jogos(
         dezenas_ult = [int(linha[f"D{i}"]) for i in range(1, 16)]
         ultimos_tuplas.add(tuple(sorted(dezenas_ult)))
 
-    # Bandas (model) baseado na base, recortado nos últimos N do wizard
+    # Bandas (model)
     bandas_model = None
     if str(config.bandas).lower() in ("soft", "hard"):
         bandas_model = construir_bandas(base_df, ultimos=int(config.ultimos))
@@ -231,7 +246,7 @@ def imprimir_resumo(jogos: List[Tuple[int, ...]], config: WizardConfig) -> None:
     print("========================================")
     print(f"Modo: {config.modo}")
     print(f"Jogos finais: {len(jogos)}")
-    print(f"Preset: {config.preset}")
+    print(f"Preset: {config.preset} (param: {config.preset_param})")
     print(f"Bandas: {config.bandas}\n")
 
     for idx, jogo in enumerate(jogos, start=1):
@@ -268,6 +283,8 @@ def main() -> None:
     base_path = Path("base/base_limpa.xlsx")
     comb_path = Path("combinacoes/combinacoes_inteligentes.csv")
 
+    preset_efetivo = _resolver_preset(args.preset, args.finais)
+
     config = WizardConfig(
         modo=args.modo,
         ultimos=args.ultimos,
@@ -276,7 +293,8 @@ def main() -> None:
         min_score=-1e18,
         candidatos_amostragem=args.candidatos,
         seed=args.seed,
-        preset=args.preset,
+        preset_param=args.preset,
+        preset=preset_efetivo,     # ✅ agora o efetivo é calculado aqui
         bandas=args.bandas,
     )
 
@@ -288,7 +306,7 @@ def main() -> None:
     print(f"Últimos: {config.ultimos} concursos")
     print(f"Jogos finais desejados: {config.jogos_finais}")
     print(f"Candidatos (amostragem): {config.candidatos_amostragem}")
-    print(f"Preset: {config.preset}")
+    print(f"Preset: {config.preset} (param: {config.preset_param})")
     print(f"Bandas: {config.bandas}")
     print("==============================================\n")
 
