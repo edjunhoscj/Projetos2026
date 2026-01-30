@@ -86,6 +86,11 @@ jobs:
         shell: bash
         run: python scripts/gerar_base_limpa.py
 
+      - name: Analisar padrões (últimos 300)
+        run: |
+          python scripts/analise_padroes.py --base base/base_limpa.xlsx --ultimos "$ULTIMOS" --out outputs/padroes_${{ steps.ts.outputs.TS }}.txt
+          cp outputs/padroes_${{ steps.ts.outputs.TS }}.txt outputs/padroes.txt || true
+
       - name: Gerar combinações inteligentes
         shell: bash
         run: python scripts/gerar_combinacoes.py
