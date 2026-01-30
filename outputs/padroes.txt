@@ -1,0 +1,39 @@
+==============================================
+ANÁLISE DE PADRÕES — ÚLTIMOS 300 CONCURSOS
+==============================================
+
+Bandas (p10 / p50 / p90):
+- Pares: 5.9 / 7.0 / 9.0
+- Soma : 172.9 / 195.0 / 217.1
+- Runs consecutivos (qtd): 3.0 / 4.0 / 5.0
+- Tamanho máx run: 3.0 / 5.0 / 7.0
+- Repetição vs concurso anterior: 7.0 / 9.0 / 11.0
+
+Linhas (1–5,6–10,11–15,16–20,21–25) bandas p10/p50/p90:
+  Linha 1: 2.0 / 3.0 / 4.0
+  Linha 2: 2.0 / 3.0 / 4.0
+  Linha 3: 2.0 / 3.0 / 4.0
+  Linha 4: 2.0 / 3.0 / 4.0
+  Linha 5: 2.0 / 3.0 / 4.0
+
+Colunas (1/6/11/16/21 etc.) bandas p10/p50/p90:
+  Col 1: 2.0 / 3.0 / 4.0
+  Col 2: 2.0 / 3.0 / 4.0
+  Col 3: 2.0 / 3.0 / 4.0
+  Col 4: 2.0 / 3.0 / 4.0
+  Col 5: 2.0 / 3.0 / 4.0
+
+Quadrantes (TL/TR/BL/BR) bandas p10/p50/p90:
+  TL: 4.0 / 5.0 / 7.0
+  TR: 2.0 / 4.0 / 5.0
+  BL: 2.0 / 4.0 / 5.0
+  BR: 1.0 / 2.0 / 3.0
+
+Top 10 dezenas mais frequentes (freq):
+  01(0.647), 15(0.640), 11(0.637), 25(0.627), 04(0.623), 13(0.620), 22(0.617), 07(0.613), 14(0.607), 02(0.603)
+
+Bottom 10 dezenas menos frequentes (freq):
+  10(0.557), 18(0.563), 05(0.573), 09(0.573), 08(0.577), 16(0.577), 20(0.577), 23(0.583), 03(0.587), 17(0.593)
+
+Dezenas mais 'atrasadas' no recorte (gap = concursos desde a última aparição):
+  02(gap=4), 10(gap=3), 14(gap=3), 15(gap=3), 18(gap=2), 01(gap=1), 13(gap=1), 19(gap=1), 23(gap=1), 24(gap=1)
