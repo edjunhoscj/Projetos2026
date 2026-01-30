@@ -84,8 +84,8 @@ jobs:
 
       - name: Gerar base limpa
         shell: bash
-          run: python scripts/gerar_base_limpa.py
-  
+                run: python scripts/gerar_base_limpa.py
+        
       - name: Analisar padrões (bandas)
         run: |
           python scripts/analise_padroes.py \
