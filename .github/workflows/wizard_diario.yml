@@ -108,6 +108,14 @@ jobs:
             --ultimos "$ULTIMOS" \
             --out outputs/analise_padroes.txt
 
+      - name: Mostrar análise de padrões no log
+        shell: bash
+        run: |
+          echo "=========== ANALISE PADROES (tail) ==========="
+          tail -n 250 outputs/analise_padroes.txt || true
+      
+
+
       - name: Gerar combinações inteligentes
         shell: bash
         run: |
