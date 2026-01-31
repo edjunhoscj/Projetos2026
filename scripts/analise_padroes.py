@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
 
-from wizard_brain import detectar_quentes_frias, construir_bandas
+# ✅ garante que a RAIZ do repo entre no sys.path (para achar wizard_brain.py)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from wizard_brain import detectar_quentes_frias, construir_bandas  # noqa: E402
 
 
 def carregar_base(base_path: Path) -> pd.DataFrame:
@@ -46,10 +52,6 @@ def contagens_1a25(vals: np.ndarray) -> Dict[int, int]:
 
 
 def atrasos(df: pd.DataFrame) -> Dict[int, int]:
-    """
-    Atraso em concursos desde a última aparição de cada dezena.
-    0 = saiu no último concurso do recorte.
-    """
     cols = [f"D{i}" for i in range(1, 16)]
     ult_idx = len(df) - 1
     last_pos = {d: None for d in range(1, 26)}
@@ -62,7 +64,7 @@ def atrasos(df: pd.DataFrame) -> Dict[int, int]:
     atraso = {}
     for d in range(1, 26):
         if last_pos[d] is None:
-            atraso[d] = 10**9  # nunca apareceu no recorte (raro)
+            atraso[d] = 10**9
         else:
             atraso[d] = ult_idx - int(last_pos[d])
     return atraso
@@ -77,24 +79,14 @@ def faixa_nome(d: int) -> str:
 
 
 def linha_5x5(d: int) -> int:
-    # 1..25 em grade 5x5 (linha 1..5)
     return (d - 1) // 5 + 1
 
 
 def coluna_5x5(d: int) -> int:
-    # 1..25 em grade 5x5 (coluna 1..5)
     return (d - 1) % 5 + 1
 
 
 def quadrante_5x5(d: int) -> str:
-    """
-    Divide a grade em 4 quadrantes:
-      Q1: linhas 1-2, colunas 1-2
-      Q2: linhas 1-2, colunas 4-5
-      Q3: linhas 4-5, colunas 1-2
-      Q4: linhas 4-5, colunas 4-5
-    Centro (linhas 3 e/ou colunas 3) vai para 'CENTRO'.
-    """
     r = linha_5x5(d)
     c = coluna_5x5(d)
 
@@ -129,14 +121,15 @@ def main() -> None:
     vals = flatten_dezenas(df_r)
     cont = contagens_1a25(vals)
 
-    # Bandas do wizard_brain
+    # ✅ bandas do wizard_brain
     bandas = construir_bandas(df, ultimos=args.ultimos)
 
-    # Quentes/Frias (no mesmo recorte)
+    # ✅ quentes/frias no recorte
     estat = detectar_quentes_frias(df, ultimos=args.ultimos, top_quentes=7, top_frias=7)
+
     atraso = atrasos(df_r)
 
-    # Agregações úteis
+    # agregações
     faixa_count = {"01-09": 0, "10-18": 0, "19-25": 0}
     pares = 0
     impares = 0
@@ -155,12 +148,11 @@ def main() -> None:
         colunas[coluna_5x5(d)] += k
         quadrantes[quadrante_5x5(d)] += k
 
-    total_bolas = n * 15 if n > 0 else 1
+    total_bolas = max(1, n * 15)
 
     def pct(x: int) -> float:
         return 100.0 * x / total_bolas
 
-    # Top por frequência e por atraso
     freq_sorted = sorted(((d, cont[d], cont[d] / max(1, n)) for d in range(1, 26)),
                          key=lambda x: x[1], reverse=True)
     atraso_sorted = sorted(((d, atraso[d]) for d in range(1, 26)), key=lambda x: x[1], reverse=True)
