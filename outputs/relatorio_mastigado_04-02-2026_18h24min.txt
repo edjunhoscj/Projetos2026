@@ -1,0 +1,37 @@
+==============================================
+RELATÓRIO MASTIGADO — FOCO EM 14/15
+DATA: 04-02-2026
+==============================================
+
+Ranking principal (prioridade):
+1) qtd_14plus = (14 + 15)  [mais importante]
+2) score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)
+3) score_13plus = (13+14+15)
+4) max_acertos
+5) media_acertos
+
+RECOMENDAÇÃO (1 ou 2 apostas):
+AGRESSIVO #1: jogo 4 | 14+15=0 | 13+=0 | max=12 | média=9.1033 | score_alvo=18 | prob_14+15≈0.00%
+AGRESSIVO #2: jogo 5 | 14+15=0 | 13+=0 | max=12 | média=8.9233 | score_alvo=10 | prob_14+15≈0.00%
+CONSERVADOR #1: jogo 2 | 14+15=0 | 13+=0 | max=12 | média=9.0300 | score_alvo=6 | prob_14+15≈0.00%
+CONSERVADOR #2: jogo 5 | 14+15=0 | 13+=0 | max=11 | média=9.0867 | score_alvo=0 | prob_14+15≈0.00%
+
+Dica prática:
+- Se você vai jogar SÓ 1: pegue o #1 (modo que tiver maior 14+15; se empatar, maior score_alvo).
+- Se você vai jogar 2: pegue o #1 agressivo + #1 conservador (tende a diversificar).
+
+------------ TOP 5 (AGRESSIVO) ------------
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0  qtd_14plus  score_alvo  score_13plus
+    4         9.1033         12.0          6.0    23     9     0     0     0           0        18.0           0.0
+    5         8.9233         12.0          5.0    33     5     0     0     0           0        10.0           0.0
+    1         9.1233         11.0          6.0    36     0     0     0     0           0         0.0           0.0
+    2         8.9167         11.0          5.0    25     0     0     0     0           0         0.0           0.0
+    3         8.8833         11.0          5.0    26     0     0     0     0           0         0.0           0.0
+
+------------ TOP 5 (CONSERVADOR) ------------
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0  qtd_14plus  score_alvo  score_13plus
+    2         9.0300         12.0          6.0    24     3     0     0     0           0         6.0           0.0
+    5         9.0867         11.0          6.0    27     0     0     0     0           0         0.0           0.0
+    1         9.0100         11.0          6.0    30     0     0     0     0           0         0.0           0.0
+    3         8.9200         11.0          5.0    28     0     0     0     0           0         0.0           0.0
+    4         8.9033         11.0          6.0    27     0     0     0     0           0         0.0           0.0
