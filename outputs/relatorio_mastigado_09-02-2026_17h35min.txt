@@ -1,0 +1,31 @@
+==============================================
+RELATÓRIO MASTIGADO — FOCO EM 14/15
+DATA: 09-02-2026
+==============================================
+
+Ranking principal (prioridade):
+1) qtd_14plus = (14 + 15)  [mais importante]
+2) score_alvo = 100*(15) + 40*(14) + 10*(13) + 2*(12) + 0*(11)
+3) score_13plus = (13+14+15)
+4) max_acertos
+5) media_acertos
+
+RECOMENDAÇÃO (1 ou 2 apostas):
+AGRESSIVO #1: jogo 2 | 14+15=0 | 13+=0 | max=12 | média=8.9050 | score_alvo=24 | prob_14+15≈0.00%
+AGRESSIVO #2: jogo 1 | 14+15=0 | 13+=0 | max=12 | média=9.1450 | score_alvo=22 | prob_14+15≈0.00%
+CONSERVADOR #1: jogo 2 | 14+15=0 | 13+=0 | max=12 | média=8.9817 | score_alvo=28 | prob_14+15≈0.00%
+CONSERVADOR #2: jogo 1 | 14+15=0 | 13+=0 | max=12 | média=9.0333 | score_alvo=22 | prob_14+15≈0.00%
+
+Dica prática:
+- Se você vai jogar SÓ 1: pegue o #1 (modo que tiver maior 14+15; se empatar, maior score_alvo).
+- Se você vai jogar 2: pegue o #1 agressivo + #1 conservador (tende a diversificar).
+
+------------ TOP 5 (AGRESSIVO) ------------
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0  qtd_14plus  score_alvo  score_13plus
+    2          8.905         12.0          6.0    44    12     0     0     0           0        24.0           0.0
+    1          9.145         12.0          6.0    66    11     0     0     0           0        22.0           0.0
+
+------------ TOP 5 (CONSERVADOR) ------------
+ jogo  media_acertos  max_acertos  min_acertos  11.0  12.0  13.0  14.0  15.0  qtd_14plus  score_alvo  score_13plus
+    2         8.9817         12.0          5.0    53    14     0     0     0           0        28.0           0.0
+    1         9.0333         12.0          6.0    62    11     0     0     0           0        22.0           0.0
