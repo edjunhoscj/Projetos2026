@@ -2,7 +2,7 @@
 ANÁLISE DE PADRÕES (BANDAS) - LOTOFÁCIL
 ==============================================
 Base: base/base_limpa.xlsx
-Recorte: últimos 398 concursos (N efetivo = 398)
+Recorte: últimos 300 concursos (N efetivo = 300)
 
 ---- BANDAS (quantis 10%..90%) ----
 Faixa 01-09:   4..7 dezenas por concurso
@@ -12,85 +12,85 @@ Pares:         6..9 por concurso
 Ímpares:       6..9 por concurso
 
 ---- DISTRIBUIÇÃO GERAL (no recorte) ----
-Total de dezenas observadas: 5970
-01-09:  2137 (35.8%)
-10-18:  2150 (36.0%)
-19-25:  1683 (28.2%)
-Pares:  2862 (47.9%)
-Ímpares:3108 (52.1%)
+Total de dezenas observadas: 4500
+01-09:  1614 (35.9%)
+10-18:  1614 (35.9%)
+19-25:  1272 (28.3%)
+Pares:  2134 (47.4%)
+Ímpares:2366 (52.6%)
 
 ---- LINHAS (grade 5x5) ----
-Linha 1: 1191 (19.9%)
-Linha 2: 1183 (19.8%)
-Linha 3: 1218 (20.4%)
-Linha 4: 1176 (19.7%)
-Linha 5: 1202 (20.1%)
+Linha 1: 905 (20.1%)
+Linha 2: 875 (19.4%)
+Linha 3: 927 (20.6%)
+Linha 4: 878 (19.5%)
+Linha 5: 915 (20.3%)
 
 ---- COLUNAS (grade 5x5) ----
-Coluna 1: 1233 (20.7%)
-Coluna 2: 1181 (19.8%)
-Coluna 3: 1160 (19.4%)
-Coluna 4: 1196 (20.0%)
-Coluna 5: 1200 (20.1%)
+Coluna 1: 923 (20.5%)
+Coluna 2: 909 (20.2%)
+Coluna 3: 876 (19.5%)
+Coluna 4: 902 (20.0%)
+Coluna 5: 890 (19.8%)
 
 ---- QUADRANTES (grade 5x5) ----
-Q1: 973 (16.3%)
-Q2: 938 (15.7%)
-Q3: 950 (15.9%)
-Q4: 969 (16.2%)
-CENTRO: 2140 (35.8%)
+Q1: 739 (16.4%)
+Q2: 695 (15.4%)
+Q3: 723 (16.1%)
+Q4: 722 (16.0%)
+CENTRO: 1621 (36.0%)
 
 ---- QUENTES / FRIAS (no recorte) ----
-Quentes (top 7): [1, 4, 6, 11, 15, 22, 25]
-Frias   (top 7): [3, 5, 8, 9, 17, 18, 23]
+Quentes (top 7): [1, 2, 4, 11, 15, 22, 25]
+Frias   (top 7): [3, 5, 8, 9, 10, 16, 18]
 
 ---- TOP 10 FREQUÊNCIA (contagem | freq por concurso) ----
-11:  258 | 0.648/conc
-01:  254 | 0.638/conc
-06:  247 | 0.621/conc
-15:  246 | 0.618/conc
-25:  246 | 0.618/conc
-22:  245 | 0.616/conc
-04:  243 | 0.611/conc
-14:  243 | 0.611/conc
-20:  243 | 0.611/conc
-24:  242 | 0.608/conc
+01:  193 | 0.643/conc
+15:  193 | 0.643/conc
+11:  192 | 0.640/conc
+04:  188 | 0.627/conc
+22:  186 | 0.620/conc
+25:  186 | 0.620/conc
+02:  183 | 0.610/conc
+07:  182 | 0.607/conc
+13:  182 | 0.607/conc
+14:  182 | 0.607/conc
 
 ---- TOP 10 ATRASOS (quanto tempo sem sair) ----
-22: atraso 3 concursos
-12: atraso 2 concursos
+17: atraso 3 concursos
+06: atraso 2 concursos
+18: atraso 2 concursos
 02: atraso 1 concursos
-03: atraso 1 concursos
 07: atraso 1 concursos
 08: atraso 1 concursos
-09: atraso 1 concursos
-15: atraso 1 concursos
-17: atraso 1 concursos
+13: atraso 1 concursos
+16: atraso 1 concursos
+19: atraso 1 concursos
 25: atraso 1 concursos
 
 ---- LISTA COMPLETA (dezena | contagem | atraso) ----
-01 |  254 | atraso 0
-02 |  234 | atraso 1
-03 |  232 | atraso 1
-04 |  243 | atraso 0
-05 |  228 | atraso 0
-06 |  247 | atraso 0
-07 |  238 | atraso 1
-08 |  231 | atraso 1
-09 |  230 | atraso 1
-10 |  237 | atraso 0
-11 |  258 | atraso 0
-12 |  233 | atraso 2
-13 |  238 | atraso 0
-14 |  243 | atraso 0
-15 |  246 | atraso 1
-16 |  237 | atraso 0
-17 |  231 | atraso 1
-18 |  227 | atraso 0
-19 |  238 | atraso 0
-20 |  243 | atraso 0
-21 |  237 | atraso 0
-22 |  245 | atraso 3
-23 |  232 | atraso 0
-24 |  242 | atraso 0
-25 |  246 | atraso 1
+01 |  193 | atraso 0
+02 |  183 | atraso 1
+03 |  173 | atraso 0
+04 |  188 | atraso 0
+05 |  168 | atraso 0
+06 |  181 | atraso 2
+07 |  182 | atraso 1
+08 |  173 | atraso 1
+09 |  173 | atraso 0
+10 |  166 | atraso 0
+11 |  192 | atraso 0
+12 |  178 | atraso 0
+13 |  182 | atraso 1
+14 |  182 | atraso 0
+15 |  193 | atraso 0
+16 |  175 | atraso 1
+17 |  180 | atraso 3
+18 |  166 | atraso 2
+19 |  180 | atraso 1
+20 |  177 | atraso 0
+21 |  182 | atraso 0
+22 |  186 | atraso 0
+23 |  182 | atraso 0
+24 |  179 | atraso 0
+25 |  186 | atraso 1
