@@ -1,0 +1,33 @@
+==============================================
+WIZARD LOTOFÁCIL - CLI
+==============================================
+Base histórica: base/base_limpa.xlsx
+Modo: agressivo
+Últimos: 300 concursos
+Jogos finais desejados: 5
+Candidatos (amostragem): 300000
+Preset: cobertura (param: auto)
+Bandas: soft
+==============================================
+
+🔍 Lendo combinações de: combinacoes/combinacoes_inteligentes.csv
+Modo: agressivo | Jogos finais desejados: 5
+Candidatos (amostragem): 300000
+Preset: cobertura (param: auto)
+Bandas: soft
+
+========================================
+        JOGOS GERADOS PELO WIZARD       
+========================================
+Modo: agressivo
+Jogos finais: 5
+Preset: cobertura (param: auto)
+Bandas: soft
+
+Jogo 01: 01 02 04 05 07 11 13 14 17 18 19 20 22 23 25
+Jogo 02: 01 03 06 08 09 10 12 14 15 16 20 21 23 24 25
+Jogo 03: 02 03 06 07 09 10 12 13 15 17 18 19 22 23 24
+Jogo 04: 02 04 05 08 09 10 11 15 16 18 19 21 22 24 25
+Jogo 05: 01 05 06 07 08 10 14 16 17 18 19 21 22 23 24
+
+Boa sorte! 🍀
