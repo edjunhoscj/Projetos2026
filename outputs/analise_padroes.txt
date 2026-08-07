@@ -16,81 +16,81 @@ Total de dezenas observadas: 4500
 01-09:  1633 (36.3%)
 10-18:  1592 (35.4%)
 19-25:  1275 (28.3%)
-Pares:  2132 (47.4%)
-Ímpares:2368 (52.6%)
+Pares:  2136 (47.5%)
+Ímpares:2364 (52.5%)
 
 ---- LINHAS (grade 5x5) ----
-Linha 1: 921 (20.5%)
+Linha 1: 920 (20.4%)
 Linha 2: 892 (19.8%)
 Linha 3: 903 (20.1%)
-Linha 4: 873 (19.4%)
+Linha 4: 874 (19.4%)
 Linha 5: 911 (20.2%)
 
 ---- COLUNAS (grade 5x5) ----
-Coluna 1: 902 (20.0%)
+Coluna 1: 901 (20.0%)
 Coluna 2: 892 (19.8%)
-Coluna 3: 884 (19.6%)
-Coluna 4: 891 (19.8%)
-Coluna 5: 931 (20.7%)
+Coluna 3: 885 (19.7%)
+Coluna 4: 892 (19.8%)
+Coluna 5: 930 (20.7%)
 
 ---- QUADRANTES (grade 5x5) ----
-Q1: 739 (16.4%)
+Q1: 737 (16.4%)
 Q2: 727 (16.2%)
-Q3: 698 (15.5%)
-Q4: 729 (16.2%)
-CENTRO: 1607 (35.7%)
+Q3: 697 (15.5%)
+Q4: 730 (16.2%)
+CENTRO: 1609 (35.8%)
 
 ---- QUENTES / FRIAS (no recorte) ----
-Quentes (top 7): [1, 4, 5, 6, 15, 23, 25]
+Quentes (top 7): [1, 4, 5, 15, 20, 23, 25]
 Frias   (top 7): [3, 8, 9, 14, 16, 17, 18]
 
 ---- TOP 10 FREQUÊNCIA (contagem | freq por concurso) ----
-01:  193 | 0.643/conc
-15:  192 | 0.640/conc
+01:  192 | 0.640/conc
+15:  191 | 0.637/conc
 25:  189 | 0.630/conc
 05:  187 | 0.623/conc
-04:  184 | 0.613/conc
-06:  184 | 0.613/conc
+04:  185 | 0.617/conc
+20:  184 | 0.613/conc
 23:  184 | 0.613/conc
-02:  183 | 0.610/conc
-20:  183 | 0.610/conc
-21:  183 | 0.610/conc
+06:  183 | 0.610/conc
+02:  182 | 0.607/conc
+21:  182 | 0.607/conc
 
 ---- TOP 10 ATRASOS (quanto tempo sem sair) ----
-18: atraso 3 concursos
-10: atraso 2 concursos
-02: atraso 1 concursos
-06: atraso 1 concursos
-09: atraso 1 concursos
-15: atraso 1 concursos
-17: atraso 1 concursos
-19: atraso 1 concursos
-22: atraso 1 concursos
-24: atraso 1 concursos
+10: atraso 3 concursos
+02: atraso 2 concursos
+06: atraso 2 concursos
+15: atraso 2 concursos
+17: atraso 2 concursos
+19: atraso 2 concursos
+01: atraso 1 concursos
+13: atraso 1 concursos
+14: atraso 1 concursos
+21: atraso 1 concursos
 
 ---- LISTA COMPLETA (dezena | contagem | atraso) ----
-01 |  193 | atraso 0
-02 |  183 | atraso 1
+01 |  192 | atraso 1
+02 |  182 | atraso 2
 03 |  174 | atraso 0
-04 |  184 | atraso 0
+04 |  185 | atraso 0
 05 |  187 | atraso 0
-06 |  184 | atraso 1
-07 |  179 | atraso 0
-08 |  173 | atraso 0
-09 |  176 | atraso 1
-10 |  180 | atraso 2
-11 |  178 | atraso 0
-12 |  179 | atraso 0
-13 |  180 | atraso 0
-14 |  174 | atraso 0
-15 |  192 | atraso 1
-16 |  164 | atraso 0
-17 |  172 | atraso 1
-18 |  173 | atraso 3
-19 |  181 | atraso 1
-20 |  183 | atraso 0
-21 |  183 | atraso 0
-22 |  179 | atraso 1
+06 |  183 | atraso 2
+07 |  180 | atraso 0
+08 |  174 | atraso 0
+09 |  176 | atraso 0
+10 |  179 | atraso 3
+11 |  179 | atraso 0
+12 |  180 | atraso 0
+13 |  179 | atraso 1
+14 |  174 | atraso 1
+15 |  191 | atraso 2
+16 |  165 | atraso 0
+17 |  171 | atraso 2
+18 |  174 | atraso 0
+19 |  180 | atraso 2
+20 |  184 | atraso 0
+21 |  182 | atraso 1
+22 |  179 | atraso 0
 23 |  184 | atraso 0
-24 |  176 | atraso 1
+24 |  177 | atraso 0
 25 |  189 | atraso 0
