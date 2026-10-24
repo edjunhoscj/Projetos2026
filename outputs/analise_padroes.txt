@@ -13,32 +13,32 @@ Pares:         6..8 por concurso
 
 ---- DISTRIBUIÇÃO GERAL (no recorte) ----
 Total de dezenas observadas: 4500
-01-09:  1634 (36.3%)
-10-18:  1589 (35.3%)
-19-25:  1277 (28.4%)
-Pares:  2127 (47.3%)
-Ímpares:2373 (52.7%)
+01-09:  1636 (36.4%)
+10-18:  1586 (35.2%)
+19-25:  1278 (28.4%)
+Pares:  2125 (47.2%)
+Ímpares:2375 (52.8%)
 
 ---- LINHAS (grade 5x5) ----
-Linha 1: 914 (20.3%)
-Linha 2: 900 (20.0%)
-Linha 3: 910 (20.2%)
+Linha 1: 916 (20.4%)
+Linha 2: 899 (20.0%)
+Linha 3: 908 (20.2%)
 Linha 4: 874 (19.4%)
-Linha 5: 902 (20.0%)
+Linha 5: 903 (20.1%)
 
 ---- COLUNAS (grade 5x5) ----
-Coluna 1: 900 (20.0%)
-Coluna 2: 877 (19.5%)
-Coluna 3: 892 (19.8%)
-Coluna 4: 898 (20.0%)
+Coluna 1: 899 (20.0%)
+Coluna 2: 879 (19.5%)
+Coluna 3: 894 (19.9%)
+Coluna 4: 895 (19.9%)
 Coluna 5: 933 (20.7%)
 
 ---- QUADRANTES (grade 5x5) ----
 Q1: 731 (16.2%)
-Q2: 724 (16.1%)
-Q3: 682 (15.2%)
-Q4: 741 (16.5%)
-CENTRO: 1622 (36.0%)
+Q2: 722 (16.0%)
+Q3: 684 (15.2%)
+Q4: 740 (16.4%)
+CENTRO: 1623 (36.1%)
 
 ---- QUENTES / FRIAS (no recorte) ----
 Quentes (top 7): [1, 5, 7, 15, 19, 20, 23]
@@ -46,51 +46,51 @@ Frias   (top 7): [2, 9, 14, 16, 17, 18, 22]
 
 ---- TOP 10 FREQUÊNCIA (contagem | freq por concurso) ----
 15:  192 | 0.640/conc
+05:  190 | 0.633/conc
 20:  190 | 0.633/conc
 01:  189 | 0.630/conc
-05:  189 | 0.630/conc
-23:  188 | 0.627/conc
+23:  189 | 0.630/conc
 07:  185 | 0.617/conc
 19:  185 | 0.617/conc
-11:  184 | 0.613/conc
-24:  184 | 0.613/conc
-04:  182 | 0.607/conc
+11:  183 | 0.610/conc
+24:  183 | 0.610/conc
+08:  182 | 0.607/conc
 
 ---- TOP 10 ATRASOS (quanto tempo sem sair) ----
-02: atraso 6 concursos
-12: atraso 2 concursos
-13: atraso 2 concursos
-22: atraso 2 concursos
-03: atraso 1 concursos
-04: atraso 1 concursos
-08: atraso 1 concursos
-09: atraso 1 concursos
-21: atraso 1 concursos
-25: atraso 1 concursos
+02: atraso 7 concursos
+13: atraso 3 concursos
+22: atraso 3 concursos
+04: atraso 2 concursos
+21: atraso 2 concursos
+06: atraso 1 concursos
+14: atraso 1 concursos
+17: atraso 1 concursos
+20: atraso 1 concursos
+24: atraso 1 concursos
 
 ---- LISTA COMPLETA (dezena | contagem | atraso) ----
 01 |  189 | atraso 0
-02 |  175 | atraso 6
-03 |  179 | atraso 1
-04 |  182 | atraso 1
-05 |  189 | atraso 0
-06 |  182 | atraso 0
+02 |  176 | atraso 7
+03 |  180 | atraso 0
+04 |  181 | atraso 2
+05 |  190 | atraso 0
+06 |  181 | atraso 1
 07 |  185 | atraso 0
-08 |  180 | atraso 1
-09 |  173 | atraso 1
-10 |  180 | atraso 0
-11 |  184 | atraso 0
-12 |  180 | atraso 2
-13 |  180 | atraso 2
-14 |  174 | atraso 0
+08 |  182 | atraso 0
+09 |  172 | atraso 0
+10 |  179 | atraso 0
+11 |  183 | atraso 0
+12 |  180 | atraso 0
+13 |  179 | atraso 3
+14 |  174 | atraso 1
 15 |  192 | atraso 0
 16 |  166 | atraso 0
-17 |  168 | atraso 0
-18 |  165 | atraso 0
+17 |  169 | atraso 1
+18 |  164 | atraso 0
 19 |  185 | atraso 0
-20 |  190 | atraso 0
-21 |  179 | atraso 1
-22 |  169 | atraso 2
-23 |  188 | atraso 0
-24 |  184 | atraso 0
-25 |  182 | atraso 1
+20 |  190 | atraso 1
+21 |  180 | atraso 2
+22 |  169 | atraso 3
+23 |  189 | atraso 0
+24 |  183 | atraso 1
+25 |  182 | atraso 0
